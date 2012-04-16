@@ -14,7 +14,7 @@ setup(
     version='0.1',
     author="Yaroslav D.",
     author_email='developers@zojax.com',
-    description=("Implements storage migration for Google App Engine (Python)"),
+    description=("Storage schema migration tool for Google App Engine (Python)"),
     long_description=(
         read('README.rst')
         ),
