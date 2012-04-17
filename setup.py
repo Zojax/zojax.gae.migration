@@ -44,7 +44,7 @@ setup(
     url='',
     packages=['zojax', 'zojax.gae', 'zojax.gae.migration'],
     package_dir = {'': 'src'},
-    data_files = gen_data_files("templates",),
+    data_files = gen_data_files("zojax/gae/migration/templates",),
     include_package_data=True,
     namespace_packages=['zojax', 'zojax.gae'],
     install_requires=[
