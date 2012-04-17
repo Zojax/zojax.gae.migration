@@ -14,7 +14,9 @@ setup(
     version='0.1',
     author="Yaroslav D.",
     author_email='developers@zojax.com',
-    description=("Storage schema migration tool for Google App Engine (Python)"),
+    description=("""Storage schema migration tool for Google App Engine (Python).
+                    Requires Google App Engine to be installed and available in python path.
+                """),
     long_description=(
         read('README.rst')
         ),

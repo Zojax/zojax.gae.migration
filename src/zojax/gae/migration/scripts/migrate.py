@@ -11,11 +11,11 @@ from ConfigParser import NoSectionError, NoOptionError
 from functools import partial
 from getpass import getpass
 
-from yoyo.migrate.connections import connect, parse_uri, unparse_uri
+#from yoyo.migrate.connections import connect, parse_uri, unparse_uri
 from yoyo.migrate.utils import prompt, plural
 from yoyo.migrate import Migration, MigrationStep
-from yoyo.migrate import DatabaseError
-from yoyo.migrate import read_migrations, create_migrations_table
+from yoyo.migrate import StorageError
+from yoyo.migrate import read_migrations#, create_migrations_table
 from yoyo.migrate import logger
 
 verbosity_levels = {
@@ -45,7 +45,7 @@ class prompted_migration(object):
         self.migration = migration
         self.choice = default
 
-def prompt_migrations(conn, paramstyle, migrations, direction):
+def prompt_migrations(migrations, direction):
     """
     Iterate through the list of migrations and prompt the user to apply/rollback each.
     Return a list of user selected migrations.
@@ -62,9 +62,9 @@ def prompt_migrations(conn, paramstyle, migrations, direction):
         choice = mig.choice
         if choice is None:
             if direction == 'apply':
-                choice = 'n' if mig.migration.isapplied(conn, paramstyle, migrations.migration_table) else 'y'
+                choice = 'n' if mig.migration.isapplied(migrations.migration_model) else 'y'
             else:
-                choice = 'y' if mig.migration.isapplied(conn, paramstyle, migrations.migration_table) else 'n'
+                choice = 'y' if mig.migration.isapplied(migrations.migration_model) else 'n'
         options = ''.join(o.upper() if o == choice else o.lower() for o in 'ynvdaqjk?')
 
         print ""
