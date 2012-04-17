@@ -2,7 +2,7 @@
 
 from webapp2 import Route
 
-from .handlers import MigrationHandler
+from ..handlers import MigrationHandler
 
 
 # Use defined routes for including into your app in such way:
