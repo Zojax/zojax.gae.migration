@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os
 import sys
 import inspect
@@ -19,15 +21,6 @@ from .utils import plural
 class StorageError(Exception):
     pass
 
-#def with_placeholders(paramstyle, sql):
-#    placeholder_gen = {
-#        'qmark': '?',
-#        'format': '%s',
-#        'pyformat': '%s',
-#    }.get(paramstyle)
-#    if placeholder_gen is None:
-#        raise ValueError("Unsupported parameter format %s" % paramstyle)
-#    return sql.replace('?', placeholder_gen)
 
 class MigrationEntry(model.Model):
     """
@@ -43,6 +36,10 @@ class MigrationEntry(model.Model):
     def _post_put_hook(self, future):
         memcache.delete(self.key.kind())
 
+default_config = {
+    'migration_model':  MigrationEntry,
+    'migration_folder': "migrations",
+    }
 
 
 class Migration(object):
@@ -80,7 +77,7 @@ class Migration(object):
         reverse = {
             'rollback': 'apply',
             'apply': 'rollback',
-        }[direction]
+            }[direction]
 
         executed_steps = []
         for step in steps:
@@ -153,8 +150,8 @@ class Transaction(StepBase):
                     logging.exception("Ignored error in step %d", step.id)
                     return
                 raise
-        #conn.commit()
-        #commit transaction
+                #conn.commit()
+                #commit transaction
 
     def rollback(self, force=False):
         for step in reversed(self.steps):
@@ -167,8 +164,8 @@ class Transaction(StepBase):
                     logging.exception("Ignored error in step %d", step.id)
                     return
                 raise
-        #conn.commit()
-        #commit transaction
+                #conn.commit()
+                #commit transaction
 
 class MigrationStep(StepBase):
     """
@@ -195,7 +192,7 @@ class MigrationStep(StepBase):
             logger.debug(" - executing %r", stmt.encode('ascii', 'replace'))
         else:
             logger.debug(" - executing %r", stmt)
-        #cursor.execute(stmt)
+            #cursor.execute(stmt)
         query = ndb.gql(stmt)
         if query:
             result = query.fetch()
@@ -222,12 +219,12 @@ class MigrationStep(StepBase):
         logger.info(" - applying step %d", self.id)
         if not self._apply:
             return
-        #try:
+            #try:
         if isinstance(self._apply, (str, unicode)):
             self._execute(self._apply)
         else:
             self._apply()
-        #finally:
+            #finally:
             #cursor.close()
 
     def rollback(self, force=False):
@@ -237,14 +234,14 @@ class MigrationStep(StepBase):
         logger.info(" - rolling back step %d", self.id)
         if self._rollback is None:
             return
-        #cursor = conn.cursor()
+            #cursor = conn.cursor()
         #try:
         if isinstance(self._rollback, (str, unicode)):
             self._execute(self._rollback)
         else:
             self._rollback()
-        #finally:
-        #    cursor.close()
+            #finally:
+            #    cursor.close()
 
 
 def read_migrations(directory, names=None, migration_model=MigrationEntry):
@@ -255,7 +252,7 @@ def read_migrations(directory, names=None, migration_model=MigrationEntry):
 
     migrations = MigrationList(migration_model)
     paths = [
-        os.path.join(directory, path) for path in os.listdir(directory) if path.endswith('.py')
+    os.path.join(directory, path) for path in os.listdir(directory) if path.endswith('.py')
     ]
 
     for path in sorted(paths):
