@@ -15,6 +15,8 @@ logger = getLogger(__name__)
 import ndb
 from ndb import model
 from google.appengine.api import memcache
+from google.appengine.ext import db
+from google.appengine.api import datastore_errors
 
 from .utils import plural
 
@@ -34,7 +36,12 @@ def register_migrations(app_name, dir):
 
     global _MIGRATIONS_DIRS
 
-    _MIGRATIONS_DIRS.add( ( app_name, os.path.normpath( os.path.abspath( os.path.join(cur_path,dir) ) ) ) )
+    _MIGRATIONS_DIRS.add(( app_name,
+                            os.path.normpath(os.path.abspath(
+                                                os.path.join(cur_path,dir)
+                                                            )
+                                            )
+                        ))
 
 
 
@@ -49,6 +56,11 @@ class MigrationEntry(model.Model):
     id = model.StringProperty()
     application = model.StringProperty()
     ctime = model.DateTimeProperty(auto_now_add=True)
+
+    status = model.StringProperty(default="in_process",
+                                  choices=["in_process",
+                                           "failed",
+                                           "success"])
 
     @classmethod
     def _pre_delete_hook(cls, key):
@@ -72,24 +84,38 @@ class Migration(object):
         self.application = application
         self.migration_model = migration_model
 
+    @property
+    def status(self):
+        status = "new"
+        migration_query = self.migration_model.query(self.migration_model.id == self.id,
+                                                    self.migration_model.application == self.application,
+                                                    )
+        if migration_query.count() > 0:
+            status = migration_query.get().status
+
+        return status
 
     def isapplied(self):
 
-        return self.migration_model.query(self.migration_model.id == self.id).count() > 0 #migration_model.gql("WHERE id = :1", str(self.id))
+        return self.migration_model.query(self.migration_model.id == self.id,
+                                          self.migration_model.application == self.application,
+                                          self.migration_model.status == "success"
+                                          ).count() > 0
 
 
     def apply(self, force=False):
         logger.info("Applying %s", self.id)
-        Migration._process_steps(self.steps, 'apply', force=force)
         migration = self.migration_model(id=self.id, application=self.application)
         migration.put()
+        Migration._process_steps(self.steps, 'apply', force=force)
+
 
 
     def rollback(self, force=False):
         logger.info("Rolling back %s", self.id)
         Migration._process_steps(reversed(self.steps), 'rollback', force=force)
 
-        migration = self.migration_model.query(self.migration_model.id == self.id).get()#.gql("WHERE id = :1", str(self.id))
+        migration = self.migration_model.query(self.migration_model.id == self.id).get()
         if migration is not None:
             migration.key.delete()
 
@@ -110,15 +136,14 @@ class Migration(object):
             try:
                 getattr(step, direction)(force)
                 executed_steps.append(step)
-            except StorageError:
-                #conn.rollback()
-                # rollback transaction
+
+            except datastore_errors.TransactionFailedError:
                 exc_info = sys.exc_info()
                 try:
                     for step in reversed(executed_steps):
                         getattr(step, reverse)()
-                except DatabaseError:
-                    logging.exception('Storage error when reversing %s of step', direction)
+                except datastore_errors.TransactionFailedError:
+                    logging.exception('Trasaction error when reversing %s of step', direction)
                 raise exc_info[0], exc_info[1], exc_info[2]
 
 class PostApplyHookMigration(Migration):
@@ -166,32 +191,37 @@ class Transaction(StepBase):
 
     def apply(self, force=False):
 
-        for step in self.steps:
-            try:
+        def callback(steps, force):
+            for step in steps:
                 step.apply(force=force)
-            except StorageError:
-                #conn.rollback()
-                #rollback transaction
-                if force or self.ignore_errors in ('apply', 'all'):
-                    logging.exception("Ignored error in step %d", step.id)
-                    return
-                raise
-                #conn.commit()
-                #commit transaction
+
+        try:
+            ndb.transaction(lambda:callback(self.steps, force), xg=True)
+        except datastore_errors.TransactionFailedError:
+            if force or self.ignore_errors in ('apply', 'all'):
+                logging.exception("Ignored error in transaction while applying")
+                return
+            raise
+
 
     def rollback(self, force=False):
-        for step in reversed(self.steps):
-            try:
+        def callback(steps, force):
+            for step in reversed(steps):
                 step.rollback(force)
-            except StorageError:
-                #conn.rollback()
-                #rollback transaction
-                if force or self.ignore_errors in ('rollback', 'all'):
-                    logging.exception("Ignored error in step %d", step.id)
-                    return
-                raise
-                #conn.commit()
-                #commit transaction
+
+        try:
+            ndb.transaction(lambda:callback(self.steps, force), xg=True)
+        except datastore_errors.TransactionFailedError:
+            if force or self.ignore_errors in ('rollback', 'all'):
+                logging.exception("Ignored error in transaction while rolling back")
+                return
+            raise
+
+    def reapply(self, force=False):
+        self.rollback(force=force)
+        self.apply(force=force)
+
+
 
 class MigrationStep(StepBase):
     """
@@ -329,6 +359,12 @@ def read_migrations(directories, names=None, migration_model=MigrationEntry):
             transactions.append(transaction)
             return transaction
 
+        def succeed():
+            pass
+
+        def fail():
+            pass
+
         file = open(path, 'r')
         try:
             source = file.read()
@@ -336,7 +372,8 @@ def read_migrations(directories, names=None, migration_model=MigrationEntry):
         finally:
             file.close()
 
-        ns = {'step' : step, 'transaction': transaction}
+        ns = {'step' : step, 'transaction': transaction,
+              'succeed': succeed, 'fail': fail}
         exec migration_code in ns
         migration = migration_class(os.path.basename(filename), transactions,
                                     source, application=app_name,

@@ -90,7 +90,8 @@ class QueueHandler(BaseHandler):
             taskqueue.add(url=self.uri_for("migration_worker"), #'/worker/',
                           params={'index': index,
                                   'action': action})
-        self.response.write("ok")
+
+        self.redirect_to("migration")
 
         return
 

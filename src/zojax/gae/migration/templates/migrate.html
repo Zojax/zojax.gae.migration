@@ -169,6 +169,7 @@
                                 <th>Application</th>
                                 <th>Migration Name</th>
                                 <th>Applied</th>
+                                <th>Status</th>
                                 <th>Action</th>
 
                             </tr>
@@ -183,11 +184,14 @@
                                         {{ entity.isapplied() }}
                                     </td>
                                     <td>
+                                        {{ entity.status }}
+                                    </td>
+                                    <td>
                                         {% if entity.isapplied() %}
-                                            <a href="{{ uri_for("migration_queue") }}?{{ entities.url_query_for('rollback', entity) }}" target="_blank">Rollback</a> |
-                                            <a href="{{ uri_for("migration_queue") }}?{{ entities.url_query_for('reapply', entity) }}" target="_blank">Reapply</a>
+                                            <a href="{{ uri_for("migration_queue") }}?{{ entities.url_query_for('rollback', entity) }}">Rollback</a> |
+                                            <a href="{{ uri_for("migration_queue") }}?{{ entities.url_query_for('reapply', entity) }}">Reapply</a>
                                         {% else %}
-                                            <a href="{{ uri_for("migration_queue") }}?{{ entities.url_query_for('apply', entity) }}" target="_blank">Apply</a>
+                                            <a href="{{ uri_for("migration_queue") }}?{{ entities.url_query_for('apply', entity) }}">Apply</a>
                                         {% endif %}
                                     </td>
                                 </tr>
