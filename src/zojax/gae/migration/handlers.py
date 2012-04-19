@@ -58,6 +58,7 @@ class MigrationHandler(BaseHandler):
                                             "templates",
                                             "migrate.html")).read())
     def get(self):
+
         #import pdb; pdb.set_trace()
 
         self.render_response(self.template, **{

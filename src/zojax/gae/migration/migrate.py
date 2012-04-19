@@ -83,6 +83,8 @@ class Migration(object):
         self.source = source
         self.application = application
         self.migration_model = migration_model
+        import logging
+        #logging.info("STEPS -> %s " % str(self.steps))
 
     @property
     def status(self):
@@ -95,11 +97,29 @@ class Migration(object):
 
         return status
 
+    @property
+    def migration_object(self):
+        migration_query = self.migration_model.query(self.migration_model.id == self.id,
+                                                     self.migration_model.application == self.application,
+        )
+
+        return migration_query.get()
+
+    def fail(self):
+        migration_object = self.migration_object
+        migration_object.status = "failed"
+        migration_object.put()
+
+    def succeed(self):
+        migration_object = self.migration_object
+        migration_object.status = "success"
+        migration_object.put()
+
     def isapplied(self):
 
         return self.migration_model.query(self.migration_model.id == self.id,
                                           self.migration_model.application == self.application,
-                                          self.migration_model.status == "success"
+                                          #self.migration_model.status == "success"
                                           ).count() > 0
 
 
@@ -107,13 +127,13 @@ class Migration(object):
         logger.info("Applying %s", self.id)
         migration = self.migration_model(id=self.id, application=self.application)
         migration.put()
-        Migration._process_steps(self.steps, 'apply', force=force)
+        Migration._process_steps(self.steps, 'apply', self, force=force)
 
 
 
     def rollback(self, force=False):
         logger.info("Rolling back %s", self.id)
-        Migration._process_steps(reversed(self.steps), 'rollback', force=force)
+        Migration._process_steps(reversed(self.steps), 'rollback', self, force=force)
 
         migration = self.migration_model.query(self.migration_model.id == self.id).get()
         if migration is not None:
@@ -124,7 +144,7 @@ class Migration(object):
         self.apply(force=force)
 
     @staticmethod
-    def _process_steps(steps, direction, force=False):
+    def _process_steps(steps, direction, migration, force=False):
 
         reverse = {
             'rollback': 'apply',
@@ -134,14 +154,14 @@ class Migration(object):
         executed_steps = []
         for step in steps:
             try:
-                getattr(step, direction)(force)
+                getattr(step, direction)(migration=migration, force=force)
                 executed_steps.append(step)
 
             except datastore_errors.TransactionFailedError:
                 exc_info = sys.exc_info()
                 try:
                     for step in reversed(executed_steps):
-                        getattr(step, reverse)()
+                        getattr(step, reverse)(migration=migration, force=force)
                 except datastore_errors.TransactionFailedError:
                     logging.exception('Trasaction error when reversing %s of step', direction)
                 raise exc_info[0], exc_info[1], exc_info[2]
@@ -158,6 +178,7 @@ class PostApplyHookMigration(Migration):
         self.__class__._process_steps(
             self.steps,
             'apply',
+            self,
             force=True
         )
 
@@ -166,16 +187,17 @@ class PostApplyHookMigration(Migration):
         self.__class__._process_steps(
             reversed(self.steps),
             'rollback',
+            self,
             force=True
         )
 
 class StepBase(object):
 
 
-    def apply(self, force=False):
+    def apply(self, migration, force=False):
         raise NotImplementedError()
 
-    def rollback(self, force=False):
+    def rollback(self, migration, force=False):
         raise NotImplementedError()
 
 class Transaction(StepBase):
@@ -189,14 +211,14 @@ class Transaction(StepBase):
         self.steps = steps
         self.ignore_errors = ignore_errors
 
-    def apply(self, force=False):
+    def apply(self, migration, force=False):
 
-        def callback(steps, force):
+        def callback(steps, migration, force):
             for step in steps:
-                step.apply(force=force)
+                step.apply(migration, force=force)
 
         try:
-            ndb.transaction(lambda:callback(self.steps, force), xg=True)
+            ndb.transaction(lambda:callback(self.steps, migration, force), xg=True)
         except datastore_errors.TransactionFailedError:
             if force or self.ignore_errors in ('apply', 'all'):
                 logging.exception("Ignored error in transaction while applying")
@@ -204,22 +226,22 @@ class Transaction(StepBase):
             raise
 
 
-    def rollback(self, force=False):
-        def callback(steps, force):
+    def rollback(self, migration, force=False):
+        def callback(steps, migration, force):
             for step in reversed(steps):
-                step.rollback(force)
+                step.rollback(migration, force=force)
 
         try:
-            ndb.transaction(lambda:callback(self.steps, force), xg=True)
+            ndb.transaction(lambda:callback(self.steps, migration, force), xg=True)
         except datastore_errors.TransactionFailedError:
             if force or self.ignore_errors in ('rollback', 'all'):
                 logging.exception("Ignored error in transaction while rolling back")
                 return
             raise
 
-    def reapply(self, force=False):
-        self.rollback(force=force)
-        self.apply(force=force)
+    def reapply(self, migration, force=False):
+        self.rollback(migration, force=force)
+        self.apply(migration, force=force)
 
 
 
@@ -265,7 +287,7 @@ class MigrationStep(StepBase):
             #out.write(plural(len(result), '(%d row)', '(%d rows)') + "\n")
             out.write(str(result))
 
-    def apply(self, force=False):
+    def apply(self, migration, force=False):
         """
         Apply the step.
 
@@ -275,29 +297,26 @@ class MigrationStep(StepBase):
         logger.info(" - applying step %d", self.id)
         if not self._apply:
             return
-            #try:
+
         if isinstance(self._apply, (str, unicode)):
             self._execute(self._apply)
         else:
-            self._apply()
-            #finally:
-            #cursor.close()
+            self._apply(migration)
 
-    def rollback(self, force=False):
+
+    def rollback(self, migration, force=False):
         """
         Rollback the step.
         """
         logger.info(" - rolling back step %d", self.id)
         if self._rollback is None:
             return
-            #cursor = conn.cursor()
-        #try:
+
         if isinstance(self._rollback, (str, unicode)):
             self._execute(self._rollback)
         else:
-            self._rollback()
-            #finally:
-            #    cursor.close()
+            self._rollback(migration)
+
 
 
 def read_migrations(directories, names=None, migration_model=MigrationEntry):
@@ -359,12 +378,6 @@ def read_migrations(directories, names=None, migration_model=MigrationEntry):
             transactions.append(transaction)
             return transaction
 
-        def succeed():
-            pass
-
-        def fail():
-            pass
-
         file = open(path, 'r')
         try:
             source = file.read()
@@ -373,7 +386,8 @@ def read_migrations(directories, names=None, migration_model=MigrationEntry):
             file.close()
 
         ns = {'step' : step, 'transaction': transaction,
-              'succeed': succeed, 'fail': fail}
+             # 'succeed': succeed, 'fail': fail
+             }
         exec migration_code in ns
         migration = migration_class(os.path.basename(filename), transactions,
                                     source, application=app_name,
