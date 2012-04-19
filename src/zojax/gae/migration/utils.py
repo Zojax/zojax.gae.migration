@@ -1,25 +1,26 @@
 import sys
-import termios
+import os
+#import termios
 
-def getch():
-    """
-    Read a single character without echoing to the console and without having
-    to wait for a newline.
-    """
-    fd = sys.stdin.fileno()
-    saved_attributes = termios.tcgetattr(fd)
-    try:
-        attributes = termios.tcgetattr(fd) # get a fresh copy!
-        attributes[3] = attributes[3] & ~(termios.ICANON | termios.ECHO)
-        attributes[6][termios.VMIN] = 1
-        attributes[6][termios.VTIME] = 0
-        termios.tcsetattr(fd, termios.TCSANOW, attributes)
-
-        a = sys.stdin.read(1)
-    finally:
-        #be sure to reset the attributes no matter what!
-        termios.tcsetattr(fd, termios.TCSANOW, saved_attributes)
-    return a
+#def getch():
+#    """
+#    Read a single character without echoing to the console and without having
+#    to wait for a newline.
+#    """
+#    fd = sys.stdin.fileno()
+#    saved_attributes = termios.tcgetattr(fd)
+#    try:
+#        attributes = termios.tcgetattr(fd) # get a fresh copy!
+#        attributes[3] = attributes[3] & ~(termios.ICANON | termios.ECHO)
+#        attributes[6][termios.VMIN] = 1
+#        attributes[6][termios.VTIME] = 0
+#        termios.tcsetattr(fd, termios.TCSANOW, attributes)
+#
+#        a = sys.stdin.read(1)
+#    finally:
+#        #be sure to reset the attributes no matter what!
+#        termios.tcsetattr(fd, termios.TCSANOW, saved_attributes)
+#    return a
 
 def prompt(prompt, options):
     """
@@ -50,3 +51,4 @@ def plural(quantity, one, plural):
     if quantity == 1:
         return one.replace('%d', '%d' % quantity)
     return plural.replace('%d', '%d' % quantity)
+

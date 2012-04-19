@@ -4,6 +4,7 @@ import os
 import sys
 import inspect
 import logging
+import inspect
 
 from itertools import count
 from datetime import datetime
@@ -18,6 +19,25 @@ from google.appengine.api import memcache
 from .utils import plural
 
 
+_MIGRATIONS_DIRS = set([])
+
+
+
+def register_migrations(app_name, dir):
+    """
+    Registers migrations directory for given app_name. Usually called
+
+    from models.py module of application.
+
+    """
+    cur_path = os.path.dirname(sys._getframe(1).f_globals["__file__"])
+
+    global _MIGRATIONS_DIRS
+
+    _MIGRATIONS_DIRS.add( ( app_name, os.path.normpath( os.path.abspath( os.path.join(cur_path,dir) ) ) ) )
+
+
+
 class StorageError(Exception):
     pass
 
@@ -26,7 +46,8 @@ class MigrationEntry(model.Model):
     """
     Represents Migration in storage.
     """
-    id = model.IntegerProperty()
+    id = model.StringProperty()
+    application = model.StringProperty()
     ctime = model.DateTimeProperty(auto_now_add=True)
 
     @classmethod
@@ -38,16 +59,17 @@ class MigrationEntry(model.Model):
 
 default_config = {
     'migration_model':  MigrationEntry,
-    'migration_folder': "migrations",
+    'migrations_dirs': _MIGRATIONS_DIRS,
     }
 
 
 class Migration(object):
 
-    def __init__(self, id, steps, source, migration_model=MigrationEntry):
+    def __init__(self, id, steps, source, application=None, migration_model=MigrationEntry):
         self.id = id
         self.steps = steps
         self.source = source
+        self.application = application
         self.migration_model = migration_model
 
 
@@ -59,7 +81,7 @@ class Migration(object):
     def apply(self, force=False):
         logger.info("Applying %s", self.id)
         Migration._process_steps(self.steps, 'apply', force=force)
-        migration = self.migration_model(id=self.id)
+        migration = self.migration_model(id=self.id, application=self.application)
         migration.put()
 
 
@@ -70,6 +92,10 @@ class Migration(object):
         migration = self.migration_model.query(self.migration_model.id == self.id).get()#.gql("WHERE id = :1", str(self.id))
         if migration is not None:
             migration.key.delete()
+
+    def reapply(self, force=False):
+        self.rollback(force=force)
+        self.apply(force=force)
 
     @staticmethod
     def _process_steps(steps, direction, force=False):
@@ -244,18 +270,21 @@ class MigrationStep(StepBase):
             #    cursor.close()
 
 
-def read_migrations(directory, names=None, migration_model=MigrationEntry):
+def read_migrations(directories, names=None, migration_model=MigrationEntry):
     """
     Return a ``MigrationList`` containing all migrations from ``directory``.
     If ``names`` is given, this only return migrations with names from the given list (without file extensions).
     """
 
     migrations = MigrationList(migration_model)
-    paths = [
-    os.path.join(directory, path) for path in os.listdir(directory) if path.endswith('.py')
-    ]
+    paths = set([])
+    for app_name, dir in directories:
+        for path in os.listdir(dir):
+            if path.endswith('.py'):
+                paths.add( (app_name, os.path.join(dir, path)) )
 
-    for path in sorted(paths):
+
+    for app_name, path in paths:
 
         filename = os.path.splitext(os.path.basename(path))[0]
 
@@ -309,7 +338,10 @@ def read_migrations(directory, names=None, migration_model=MigrationEntry):
 
         ns = {'step' : step, 'transaction': transaction}
         exec migration_code in ns
-        migration = migration_class(os.path.basename(filename), transactions, source)
+        migration = migration_class(os.path.basename(filename), transactions,
+                                    source, application=app_name,
+                                    migration_model=migration_model)
+
         if migration_class is PostApplyHookMigration:
             migrations.post_apply.append(migration)
         else:
@@ -332,6 +364,22 @@ class MigrationList(list):
         self.migration_model = migration_model
         self.post_apply = post_apply if post_apply else []
         #initialize_connection(self.conn, migration_table)
+
+    def url_query_for(self, action, migration):
+        """
+        Returns url query string for provided action and migration.
+        Possible actions are:
+            - apply;
+            - rollback;
+            - reapply;
+        migration - migration from migration list
+
+        """
+        query = "action=%(action)s&index=%(index)s"
+        index = self.index(migration)
+
+        return query % locals()
+
 
     def to_apply(self):
         """
@@ -370,13 +418,13 @@ class MigrationList(list):
         if not self:
             return
         for m in self + self.post_apply:
-            m.apply(self.migration_model, force)
+            m.apply(force)
 
     def rollback(self, force=False):
         if not self:
             return
         for m in self + self.post_apply:
-            m.rollback(self.migration_model, force)
+            m.rollback(force)
 
     def __getslice__(self, i, j):
         return self.__class__(
