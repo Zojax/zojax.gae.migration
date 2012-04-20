@@ -9,15 +9,26 @@ import os
 
 from unittest import TestCase as BaseTestCase
 
-from google.appengine.ext import testbed\
+from google.appengine.ext import testbed
+from webapp2 import WSGIApplication
+
+from webtest import TestApp
 
 from .. import migrate
 
-from migrate import read_migrations, register_migrations
+from ..migrate import read_migrations, register_migrations
+
+from ..routes import routes
 
 #from .migrate import DatabaseError
 
 register_migrations("zojax.gae.migration", "migrations")
+
+app = WSGIApplication()
+
+for r in routes:
+    app.router.add(r)
+
 
 class TestCase(BaseTestCase):
     def setUp(self):
@@ -35,11 +46,17 @@ class TestCase(BaseTestCase):
         self.testbed.init_memcache_stub()
         self.testbed.init_mail_stub()
         self.testbed.init_taskqueue_stub(root_path=os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        self.app = TestApp(app)
 
-    def testTest(self):
+    def testReadMigrations(self):
         migrations = read_migrations(migrate._MIGRATIONS_DIRS)
 
         self.assertEqual(len(migrations), 2)
+
+    def testTest(self):
+
+        #import nose; nose.tools.set_trace()
+        'aa'/0
 
 
 

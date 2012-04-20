@@ -50,6 +50,7 @@ setup(
     namespace_packages=['zojax', 'zojax.gae'],
     install_requires=[
         'distribute',
+        'webtest'
     ],
     zip_safe=False,
 )
