@@ -12,11 +12,11 @@ from functools import partial
 from getpass import getpass
 
 #from yoyo.migrate.connections import connect, parse_uri, unparse_uri
-from yoyo.migrate.utils import prompt, plural
-from yoyo.migrate import Migration, MigrationStep
-from yoyo.migrate import StorageError
-from yoyo.migrate import read_migrations#, create_migrations_table
-from yoyo.migrate import logger
+#from yoyo.migrate.utils import prompt, plural
+#from yoyo.migrate import Migration, MigrationStep
+#from yoyo.migrate import StorageError
+#from yoyo.migrate import read_migrations#, create_migrations_table
+#from yoyo.migrate import logger
 
 verbosity_levels = {
     0: logging.ERROR,

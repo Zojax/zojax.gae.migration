@@ -1,19 +1,33 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
-import inspect
-import logging
-import inspect
 
-from itertools import count
-from datetime import datetime
+######################
+#PATCH FOR ndb IMPORT#
+######################
+import sys
+
+try:
+    import ndb
+except ImportError: # pragma: no cover
+    from google.appengine.ext import ndb
+
+# Monkey patch for ndb availability
+sys.modules['ndb'] = ndb
+
+######################
+
+import ndb
+import logging
 from logging import getLogger
 
 logger = getLogger(__name__)
 
-import ndb
+from itertools import count
+from datetime import datetime
+
 from ndb import model
+
 from google.appengine.api import memcache
 from google.appengine.ext import db
 from google.appengine.api import datastore_errors
@@ -150,9 +164,9 @@ class Migration(object):
 
         Migration._process_steps(reversed(self.steps), 'rollback', self, force=force)
 
-        #if self.key is not None:
+        if self.key is not None:
             #import pdb; pdb.set_trace()
-            #migration.key.delete()
+            migration.key.delete()
 
     def reapply(self, force=False):
         self.rollback(force=force)
@@ -510,40 +524,3 @@ class MigrationList(list):
             super(MigrationList, self).__getslice__(i, j),
             self.post_apply
         )
-
-#def create_migrations_table(conn, tablename):
-#    """
-#    Create a database table to track migrations
-#    """
-#    try:
-#        cursor = conn.cursor()
-#        try:
-#            try:
-#                cursor.execute("""
-#                    CREATE TABLE %s (id VARCHAR(255) NOT NULL PRIMARY KEY, ctime TIMESTAMP)
-#                """ % (tablename,))
-#                conn.commit()
-#            except DatabaseError:
-#                pass
-#        finally:
-#            cursor.close()
-#    finally:
-#        conn.rollback()
-
-
-#def initialize_connection(conn, tablename):
-#    """
-#    Initialize the DBAPI connection for use.
-#
-#    - Installs ``yoyo.migrate.DatabaseError`` as a base class for the
-#      connection's own DatabaseError
-#
-#    - Creates the migrations table if not already existing
-#
-#    """
-#    module = inspect.getmodule(type(conn))
-#    if DatabaseError not in module.DatabaseError.__bases__:
-#        module.DatabaseError.__bases__ += (DatabaseError,)
-#    create_migrations_table(conn, tablename)
-
-

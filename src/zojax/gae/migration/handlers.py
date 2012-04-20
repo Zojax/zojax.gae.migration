@@ -60,8 +60,6 @@ class MigrationHandler(BaseHandler):
                                             "migrate.html")).read())
     def get(self):
 
-        #import pdb; pdb.set_trace()
-
         self.render_response(self.template, **{
                                                 "entities": self.migrations,
                                                 })
@@ -89,7 +87,7 @@ class QueueHandler(BaseHandler):
             pass
         if migration is not None and action in ("apply", "rollback", "reapply"):
 
-            taskqueue.add(url=self.uri_for("migration_worker"), #'/worker/',
+            taskqueue.add(url=self.uri_for("migration_worker"),
                           params={'index': index,
                                   'action': action})
 
@@ -120,7 +118,6 @@ class MigrationStatus(BaseHandler):
         except ValueError, TypeError:
             id = None
         logging.info("MigrationStatus: got id %s " % str(id))
-        #migration = filter(lambda x: x.application==application and x.id==id, self.migrations)[0]
 
         migration_object = self.migration_model.get_by_id(id)
         #import pdb; pdb.set_trace()
