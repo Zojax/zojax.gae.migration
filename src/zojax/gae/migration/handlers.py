@@ -2,6 +2,7 @@
 
 import os
 import webapp2, ndb
+import logging
 
 from jinja2 import Template
 from webapp2_extras import jinja2
@@ -103,7 +104,28 @@ class MigrationWorker(BaseHandler):
         action = self.request.get('action')
         migration = self.migrations[int(self.request.get('index'))]
 
-        def migrate():
-            getattr(migration, action)()
+        #def migrate():
+        getattr(migration, action)()
 
-        db.run_in_transaction(migrate)
+        #migrate()
+        #db.run_in_transaction(migrate)
+
+class MigrationStatus(BaseHandler):
+
+    def post(self): # should run at most 1/s
+
+        status = self.request.get('status')
+        try:
+            id = int(self.request.get('id'))
+        except ValueError, TypeError:
+            id = None
+        logging.info("MigrationStatus: got id %s " % str(id))
+        #migration = filter(lambda x: x.application==application and x.id==id, self.migrations)[0]
+
+        migration_object = self.migration_model.get_by_id(id)
+        #import pdb; pdb.set_trace()
+        logging.info("MigrationStatus: got migration_object %s " % str(migration_object))
+        if migration_object:
+            migration_object.status = status
+            migration_object.put()
+            logging.info("MigrationStatus: put migration_object %s " % str(migration_object))

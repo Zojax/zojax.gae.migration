@@ -17,6 +17,7 @@ from ndb import model
 from google.appengine.api import memcache
 from google.appengine.ext import db
 from google.appengine.api import datastore_errors
+from google.appengine.api import taskqueue
 
 from .utils import plural
 
@@ -77,14 +78,17 @@ default_config = {
 
 class Migration(object):
 
+    key = None
+
     def __init__(self, id, steps, source, application=None, migration_model=MigrationEntry):
         self.id = id
         self.steps = steps
         self.source = source
         self.application = application
         self.migration_model = migration_model
-        import logging
+        #import logging
         #logging.info("STEPS -> %s " % str(self.steps))
+
 
     @property
     def status(self):
@@ -97,23 +101,29 @@ class Migration(object):
 
         return status
 
-    @property
-    def migration_object(self):
-        migration_query = self.migration_model.query(self.migration_model.id == self.id,
-                                                     self.migration_model.application == self.application,
-        )
-
-        return migration_query.get()
+#    @property
+#    def migration_object(self):
+#        migration_query = self.migration_model.query(self.migration_model.id == self.id,
+#                                                     self.migration_model.application == self.application,
+#        )
+#
+#        return migration_query.get()
 
     def fail(self):
-        migration_object = self.migration_object
-        migration_object.status = "failed"
-        migration_object.put()
+        logger.info("failing the migration")
+
+        taskqueue.add(url="/_ah/migration/status/",
+                        params={'id': self.key.id() if self.key else None,
+                                'status': "failed"})
+
 
     def succeed(self):
-        migration_object = self.migration_object
-        migration_object.status = "success"
-        migration_object.put()
+        logger.info("succeding the migration")
+
+        taskqueue.add(url="/_ah/migration/status/",
+            params={'id': self.key.id() if self.key else None,
+                    'status': "success"})
+
 
     def isapplied(self):
 
@@ -126,18 +136,23 @@ class Migration(object):
     def apply(self, force=False):
         logger.info("Applying %s", self.id)
         migration = self.migration_model(id=self.id, application=self.application)
-        migration.put()
+        self.key = migration.put()
         Migration._process_steps(self.steps, 'apply', self, force=force)
 
 
 
     def rollback(self, force=False):
         logger.info("Rolling back %s", self.id)
+        migration = self.migration_model.query(self.migration_model.id == self.id,
+                                               self.migration_model.application == self.application).get()
+        if migration is not None:
+            self.key = migration.key
+
         Migration._process_steps(reversed(self.steps), 'rollback', self, force=force)
 
-        migration = self.migration_model.query(self.migration_model.id == self.id).get()
-        if migration is not None:
-            migration.key.delete()
+        #if self.key is not None:
+            #import pdb; pdb.set_trace()
+            #migration.key.delete()
 
     def reapply(self, force=False):
         self.rollback(force=force)
@@ -159,12 +174,16 @@ class Migration(object):
 
             except datastore_errors.TransactionFailedError:
                 exc_info = sys.exc_info()
+                migration.fail()
                 try:
                     for step in reversed(executed_steps):
                         getattr(step, reverse)(migration=migration, force=force)
                 except datastore_errors.TransactionFailedError:
                     logging.exception('Trasaction error when reversing %s of step', direction)
                 raise exc_info[0], exc_info[1], exc_info[2]
+            except Exception:
+                migration.fail()
+                raise
 
 class PostApplyHookMigration(Migration):
     """
@@ -223,6 +242,10 @@ class Transaction(StepBase):
             if force or self.ignore_errors in ('apply', 'all'):
                 logging.exception("Ignored error in transaction while applying")
                 return
+            migration.fail()
+            raise
+        except Exception:
+            migration.fail()
             raise
 
 
@@ -237,6 +260,10 @@ class Transaction(StepBase):
             if force or self.ignore_errors in ('rollback', 'all'):
                 logging.exception("Ignored error in transaction while rolling back")
                 return
+            migration.fail()
+            raise
+        except Exception:
+            migration.fail()
             raise
 
     def reapply(self, migration, force=False):

@@ -2,7 +2,7 @@
 
 from webapp2 import Route
 
-from ..handlers import MigrationHandler, QueueHandler, MigrationWorker
+from ..handlers import MigrationHandler, QueueHandler, MigrationWorker, MigrationStatus
 
 
 # Use defined routes for including into your app in such way:
@@ -15,5 +15,6 @@ routes = [
     Route('/', MigrationHandler, name='migration'),
     Route('/migrate/', QueueHandler, name='migration_queue'),
     Route('/worker/', MigrationWorker, name='migration_worker'),
+    Route('/status/', MigrationStatus, name='migration_status'),
 
     ]
