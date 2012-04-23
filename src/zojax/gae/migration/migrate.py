@@ -239,10 +239,11 @@ class Transaction(StepBase):
     single database transaction.
     """
 
-    def __init__(self, steps, ignore_errors=None):
+    def __init__(self, steps, ignore_errors=None, fake_transaction=False):
         assert ignore_errors in (None, 'all', 'apply', 'rollback')
         self.steps = steps
         self.ignore_errors = ignore_errors
+        self.fake_transaction = fake_transaction
 
     def apply(self, migration, force=False):
 
@@ -251,14 +252,20 @@ class Transaction(StepBase):
                 step.apply(migration, force=force)
 
         try:
-            ndb.transaction(lambda:callback(self.steps, migration, force), xg=True)
+            if self.fake_transaction:
+                callback(self.steps, migration, force)
+            else:
+                ndb.transaction(lambda:callback(self.steps, migration, force), xg=True)
         except datastore_errors.TransactionFailedError:
             if force or self.ignore_errors in ('apply', 'all'):
                 logging.exception("Ignored error in transaction while applying")
                 return
             migration.fail()
             raise
-        except Exception:
+        except Exception, err:
+            if force or self.ignore_errors in ('apply', 'all'):
+                logging.exception("Ignored error in transaction while applying")
+                return
             migration.fail()
             raise
 
@@ -389,12 +396,18 @@ def read_migrations(directories, names=None, migration_model=MigrationEntry):
         step_id = count(0)
         transactions = []
 
-        def step(apply, rollback=None, ignore_errors=None):
+        def step(apply, rollback=None, ignore_errors=None, fake_transaction=True):
             """
             Wrap the given apply and rollback code in a transaction, and add it
+
             to the list of steps. Return the transaction-wrapped step.
+
+            If fake_transaction is True, transaction won't actually run step in ndb transaction.
+
+            ignore_errors may be "apply", "rollback" or "all". If not provided all errors will be raised
+
             """
-            t = Transaction([MigrationStep(step_id.next(), apply, rollback)], ignore_errors)
+            t = Transaction([MigrationStep(step_id.next(), apply, rollback)], ignore_errors, fake_transaction=fake_transaction)
             transactions.append(t)
             return t
 
