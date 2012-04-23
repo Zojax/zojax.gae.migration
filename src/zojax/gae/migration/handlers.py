@@ -59,7 +59,7 @@ class MigrationHandler(BaseHandler):
                                             "templates",
                                             "migrate.html")).read())
     def get(self):
-
+        #import pdb; pdb.set_trace()
         self.render_response(self.template, **{
                                                 "entities": self.migrations,
                                                 })
@@ -89,7 +89,10 @@ class QueueHandler(BaseHandler):
 
             taskqueue.add(url=self.uri_for("migration_worker"),
                           params={'index': index,
-                                  'action': action})
+                                  'action': action,
+                                  'exec_chain': 1,
+                                  'application': getattr(migration, "application", None)
+                                  })
 
         self.redirect_to("migration")
 
@@ -100,13 +103,66 @@ class MigrationWorker(BaseHandler):
 
     def post(self): # should run at most 1/s
         action = self.request.get('action')
-        migration = self.migrations[int(self.request.get('index'))]
+        application = self.request.get('application')
+        exec_chain = bool(self.request.get('exec_chain'))
+        index = self.request.get('index')
 
-        #def migrate():
-        getattr(migration, action)()
+        if index:
+            migration = self.migrations[int(index)]
+        else:
+            migration = None
 
-        #migrate()
-        #db.run_in_transaction(migrate)
+        if exec_chain:
+            # getting migration index in list for it's application
+            migrations = self.migrations.get_for_app(application)
+            #Choosing appropriate order of the chain
+            if action == "apply":
+                # get current migration
+                migrations = migrations.to_apply()
+                if migration is not None:
+                    migrations = migrations[:migrations.index(migration)+1]
+                cmigration = migrations[0]
+                # execute current migration
+                getattr(cmigration, action)()
+                # check whether number of not applied migrations greater than 1
+                if len(migrations) > 1:
+                    # start task for next migration
+                    taskqueue.add(url=self.uri_for("migration_worker"),
+                                  params={'action': action,
+                                          'exec_chain': 1,
+                                          'application': application
+                                         }
+                                 )
+            if action == "rollback":
+                migrations = migrations.to_rollback()
+                #import pdb; pdb.set_trace()
+                if migration is not None:
+                    migrations = migrations[:migrations.index(migration)+1]
+                    #migrations = migrations[migrations.index(migration):]
+                cmigration = migrations[0]
+                # execute current migration
+                getattr(cmigration, action)()
+                # check whether number of not applied migrations greater than 1
+                if len(migrations) > 1:
+                    # start task for next migration
+                    taskqueue.add(url=self.uri_for("migration_worker"),
+                        params={'action': action,
+                                'exec_chain': 1,
+                                'application': application
+                        }
+                    )
+
+        else:
+            # execute only current migration
+
+            #migration = self.migrations[index]
+
+            #def migrate():
+            if migration is not None:
+                getattr(migration, action)()
+
+            #migrate()
+            #db.run_in_transaction(migrate)
 
 class MigrationStatus(BaseHandler):
 

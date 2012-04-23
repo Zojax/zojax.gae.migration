@@ -38,30 +38,46 @@ from .utils import plural
 
 _MIGRATIONS_DIRS = set([])
 
+class StorageError(Exception):
+    pass
 
 
-def register_migrations(app_name, dir):
+class AlreadyRegisteredError(Exception):
+    """
+    Raised when duplicate application registering attempted.
+    """
+    pass
+
+
+def register_migrations(app_name, path):
     """
     Registers migrations directory for given app_name. Usually called
 
     from models.py module of application.
 
+    Raises AlreadyRegisteredError when already registered application or
+
+    migrations path occurs.
+
     """
+
     cur_path = os.path.dirname(sys._getframe(1).f_globals["__file__"])
 
     global _MIGRATIONS_DIRS
 
-    _MIGRATIONS_DIRS.add(( app_name,
-                            os.path.normpath(os.path.abspath(
-                                                os.path.join(cur_path,dir)
-                                                            )
-                                            )
-                        ))
+    abs_path = os.path.normpath(os.path.abspath(
+                                    os.path.join(cur_path, path)
+                                ))
+    valid_appname = app_name.strip()
 
+    for known_app, known_path in _MIGRATIONS_DIRS:
+        if valid_appname == known_app:
+            raise AlreadyRegisteredError("Application '%s' has already been registered" % valid_appname)
+        if abs_path == known_path:
+            raise AlreadyRegisteredError("Migration directory '%s' has already been registered for '%s' application" % (abs_path, known_app))
 
+    _MIGRATIONS_DIRS.add((valid_appname, abs_path))
 
-class StorageError(Exception):
-    pass
 
 
 class MigrationEntry(model.Model):
@@ -468,7 +484,22 @@ class MigrationList(list):
         super(MigrationList, self).__init__(items if items else [])
         self.migration_model = migration_model
         self.post_apply = post_apply if post_apply else []
-        #initialize_connection(self.conn, migration_table)
+        #self.applications = set([])
+
+#    def append(self, migration):
+#        super(MigrationList, self).append(migration)
+#        if hasattr(migration, "application"):
+#            self.applications.add(migration.application)
+
+    def get_for_app(self, app_name):
+        """
+        Returns a MigrationList instance of migrations for provided application
+        """
+        return self.__class__(
+                            self.migration_model,
+                            filter(lambda m: getattr(m,"application", None) == app_name, self),
+                            self.post_apply)
+
 
     def url_query_for(self, action, migration):
         """
@@ -492,7 +523,7 @@ class MigrationList(list):
         """
         return self.__class__(
             self.migration_model,
-            [ m for m in self if not m.isapplied(self.migration_model) ],
+            [ m for m in self if not m.isapplied() ],
             self.post_apply
         )
 
@@ -505,7 +536,7 @@ class MigrationList(list):
         """
         return self.__class__(
             self.migration_model,
-            list(reversed([m for m in self if m.isapplied(self.migration_model)])),
+            list(reversed([m for m in self if m.isapplied()])),
             self.post_apply
         )
 
