@@ -390,12 +390,13 @@ def read_migrations(directories, names=None, migration_model=MigrationEntry):
     """
 
     migrations = MigrationList(migration_model)
-    paths = set([])
+    paths = []#set([])
     for app_name, dir in directories:
         for path in os.listdir(dir):
             if path.endswith('.py'):
-                paths.add( (app_name, os.path.join(dir, path)) )
-
+                paths.append( (app_name, os.path.join(dir, path)) )
+    paths.sort()
+    #import pdb; pdb.set_trace()
 
     for app_name, path in paths:
 
