@@ -49,7 +49,7 @@ class TestCase(BaseTestCase):
         self.app = TestApp(app)
 
     def testReadMigrations(self):
-        migrations = read_migrations(migrate._MIGRATIONS_DIRS)
+        migrations = read_migrations(migrate._MIGRATION_DIRS)
 
         self.assertEqual(len(migrations), 2)
 

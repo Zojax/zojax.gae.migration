@@ -11,7 +11,7 @@ from google.appengine.ext import db
 from google.appengine.api import taskqueue
 
 from .migrate import default_config, MigrationEntry
-from .migrate import read_migrations
+from .migrate import read_migrations, MigrationList, call_next, get_migration_dirs
 
 
 class BaseHandler(webapp2.RequestHandler):
@@ -30,8 +30,8 @@ class BaseHandler(webapp2.RequestHandler):
                         #user_values=config
                         )
         self.migration_model = self.config.get("migration_model", MigrationEntry)
-        self.migrations_dirs = self.config.get("migrations_dirs", set([]))
-        self.migrations = read_migrations(self.migrations_dirs)
+
+        self.migrations = read_migrations(get_migration_dirs())
 
 
     @webapp2.cached_property
@@ -75,24 +75,10 @@ class QueueHandler(BaseHandler):
     def get(self):
 
         action = self.request.GET.get("action")
-        index = self.request.GET.get("index")
+        target_index = self.request.GET.get("index", None)
+        application = self.request.GET.get("app")
 
-        if action is None or index is None:
-            return
-
-        migration = None
-        try:
-            migration = self.migrations[int(index)]
-        except (ValueError, IndexError):
-            pass
-        if migration is not None and action in ("apply", "rollback", "reapply"):
-
-            taskqueue.add(url=self.uri_for("migration_worker"),
-                          params={'index': index,
-                                  'action': action,
-                                  'exec_chain': 1,
-                                  #'application': getattr(migration, "application", None)
-                                  })
+        call_next(self.migrations, application, target_index, action, self.uri_for("migration_worker"))
 
         self.redirect_to("migration")
 
@@ -102,65 +88,25 @@ class QueueHandler(BaseHandler):
 class MigrationWorker(BaseHandler):
 
     def post(self): # should run at most 1/s
+        application = self.request.get('application')
         action = self.request.get('action')
-        exec_chain = bool(self.request.get('exec_chain'))
-        index = int(self.request.get('index', 0))
-        migration = self.migrations[index]
+        index = self.request.get('index')
+        target_index = self.request.get('target_index')
 
-        if exec_chain:
-            # getting migration index in list for it's application
-            migrations = self.migrations.get_for_app(getattr(migration, 'application', None))
+        if not action or not index or not target_index or not application:
+            return
 
-            #Choosing appropriate order of the chain
-            if action == "apply":
-                # get current migration
-                migrations = migrations.to_apply()
-            elif action == "rollback":
-                migrations = migrations.to_rollback()
+        try:
+            migrations = self.migrations[application]
+            migration = migrations[int(index)]
+        except (ValueError, IndexError, KeyError):
+            migration = None
+            migrations = []
 
-            migrations = migrations[:migrations.index(migration)+1]
+        if migration is not None:
+            migration.target_index = int(target_index)
+            getattr(migration, action)()
 
-
-            cmigration = migrations[0]
-            # execute current migration
-            getattr(cmigration, action)()
-            # check whether number of not applied migrations greater than 1
-            if len(migrations) > 1:
-                # start task for next migration
-                taskqueue.add(url=self.uri_for("migration_worker"),
-                              params={'index': index,
-                                      'action': action,
-                                      'exec_chain': 1,
-                                     }
-                             )
-#                #import pdb; pdb.set_trace()
-#                if migration is not None:
-#                    migrations = migrations[:migrations.index(migration)+1]
-#                    #migrations = migrations[migrations.index(migration):]
-#                cmigration = migrations[0]
-#                # execute current migration
-#                getattr(cmigration, action)()
-#                # check whether number of not applied migrations greater than 1
-#                if len(migrations) > 1:
-#                    # start task for next migration
-#                    taskqueue.add(url=self.uri_for("migration_worker"),
-#                        params={'action': action,
-#                                'exec_chain': 1,
-#                                'application': application
-#                        }
-#                    )
-
-        else:
-            # execute only current migration
-
-            #migration = self.migrations[index]
-
-            #def migrate():
-            if migration is not None:
-                getattr(migration, action)()
-
-            #migrate()
-            #db.run_in_transaction(migrate)
 
 class MigrationStatus(BaseHandler):
 

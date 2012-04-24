@@ -36,7 +36,54 @@ from google.appengine.api import taskqueue
 from .utils import plural
 
 
-_MIGRATIONS_DIRS = set([])
+_MIGRATION_DIRS = set([])
+
+def get_migration_dirs():
+    """
+    Returns a set of registered migration directories
+    """
+    global _MIGRATION_DIRS
+
+    return _MIGRATION_DIRS
+
+
+def call_next(migrations, application, target_index, action, worker_url):
+    """
+    Calculates index of the next migration and starts it.
+        * migrations - MigrationList instance, list of all migrations;
+        * target_index - index of the target migration from the migrations list;
+        * application - application name used in migrations list;
+        * action - apply|rollback|reapply;
+        * worker_url - url of the migration handler;
+
+
+    """
+    assert isinstance(migrations, dict), "migrations should be a dict"
+    assert application, "application should not be empty"
+    assert action in ("apply", "rollback", "reapply"), "action should be apply, rollback or reapply"
+
+    target_migrations = target_migration = origin_migrations = None
+    target_index = int(target_index) if target_index else None
+    try:
+        origin_migrations = migrations[application]
+        target_migration = origin_migrations[int(target_index)]
+    except (ValueError, IndexError, KeyError):
+        pass
+    if target_migration is not None and target_index is not None and len(origin_migrations):
+        if action == "apply":
+            target_migrations = origin_migrations[:target_index+1].to_apply()
+        elif action == "rollback":
+            target_migrations = origin_migrations[target_index:].to_rollback()
+
+        if target_migrations:
+            index = origin_migrations.index(target_migrations[0])
+
+            taskqueue.add(url=worker_url,
+                params={'index': index,
+                        'action': action,
+                        'application': application,
+                        'target_index': target_index
+                })
 
 class StorageError(Exception):
     pass
@@ -49,7 +96,7 @@ class AlreadyRegisteredError(Exception):
     pass
 
 
-def register_migrations(app_name, path):
+def register_migrations(app_name, migrations_path="migrations"):
     """
     Registers migrations directory for given app_name. Usually called
 
@@ -63,20 +110,20 @@ def register_migrations(app_name, path):
 
     cur_path = os.path.dirname(sys._getframe(1).f_globals["__file__"])
 
-    global _MIGRATIONS_DIRS
+    global _MIGRATION_DIRS
 
     abs_path = os.path.normpath(os.path.abspath(
-                                    os.path.join(cur_path, path)
+                                    os.path.join(cur_path, migrations_path)
                                 ))
     valid_appname = app_name.strip()
 
-    for known_app, known_path in _MIGRATIONS_DIRS:
+    for known_app, known_path in _MIGRATION_DIRS:
         if valid_appname == known_app:
             raise AlreadyRegisteredError("Application '%s' has already been registered" % valid_appname)
         if abs_path == known_path:
             raise AlreadyRegisteredError("Migration directory '%s' has already been registered for '%s' application" % (abs_path, known_app))
 
-    _MIGRATIONS_DIRS.add((valid_appname, abs_path))
+    _MIGRATION_DIRS.add((valid_appname, abs_path))
 
 
 
@@ -88,10 +135,14 @@ class MigrationEntry(model.Model):
     application = model.StringProperty()
     ctime = model.DateTimeProperty(auto_now_add=True)
 
-    status = model.StringProperty(default="in_process",
-                                  choices=["in_process",
-                                           "failed",
-                                           "success"])
+    status = model.StringProperty(required=True,
+                                  choices=["apply in process",
+                                           "rollback in process",
+                                           "apply failed",
+                                           "rollback failed",
+                                           "apply success",
+                                           "rollback success",
+                                           ])
 
     @classmethod
     def _pre_delete_hook(cls, key):
@@ -102,7 +153,7 @@ class MigrationEntry(model.Model):
 
 default_config = {
     'migration_model':  MigrationEntry,
-    'migrations_dirs': _MIGRATIONS_DIRS,
+    #'migrations_dirs': _MIGRATION_DIRS,
     }
 
 
@@ -116,12 +167,11 @@ class Migration(object):
         self.source = source
         self.application = application
         self.migration_model = migration_model
-        #import logging
-        #logging.info("STEPS -> %s " % str(self.steps))
+        self.target_index = None # target migration index
 
 
-    @property
-    def status(self):
+
+    def get_status(self):
         status = "new"
         migration_query = self.migration_model.query(self.migration_model.id == self.id,
                                                     self.migration_model.application == self.application,
@@ -131,41 +181,73 @@ class Migration(object):
 
         return status
 
-#    @property
-#    def migration_object(self):
-#        migration_query = self.migration_model.query(self.migration_model.id == self.id,
-#                                                     self.migration_model.application == self.application,
-#        )
-#
-#        return migration_query.get()
-
-    def fail(self):
-        logger.info("failing the migration")
-
-        taskqueue.add(url="/_ah/migration/status/",
-                        params={'id': self.key.id() if self.key else None,
-                                'status': "failed"})
-
-
-    def succeed(self):
-        logger.info("succeding the migration")
+    def set_status(self, status):
+        logger.info("setting the migration status to %s" % status)
 
         taskqueue.add(url="/_ah/migration/status/",
             params={'id': self.key.id() if self.key else None,
-                    'status': "success"})
+                    'status': status})
+
+    status = property(get_status, set_status)
+
+    def fail(self):
+        logger.info("failing the migration")
+        if self.status == "apply in process":
+            self.status = "apply failed"
+        if self.status == "rollback in process":
+            self.status = "rollback failed"
+
+
+
+    def succeed(self):
+        logger.info("succeding the migration with current status %s " % self.status)
+        action = None
+        if self.status == "apply in process":
+            self.status = "apply success"
+            action = "apply"
+        if self.status == "rollback in process":
+            self.status = "rollback success"
+            action = "rollback"
+
+        call_next(read_migrations(get_migration_dirs()), self.application, self.target_index, action, '/_ah/migration/worker/')
+
+#        if self.target_index is None:
+#            return
+#        target_migrations = target_migration = None
+#        migrations = read_migrations()[self.application]
+#
+#        if action == "apply":
+#            target_migrations = migrations[:target_index+1].to_apply()
+#        elif action == "rollback":
+#            target_migrations = migrations[target_index:].to_rollback()
+#
+#        if target_migrations:
+#            index = migrations.index(target_migrations[0])
+#
+#            # start task for next migration
+#            taskqueue.add(url='/_ah/migration/worker/',
+#                params={'index': index,
+#                        'action': action,
+#                        'application': application,
+#                        'target_index': target_index
+#                        }
+#            )
+
 
 
     def isapplied(self):
 
         return self.migration_model.query(self.migration_model.id == self.id,
                                           self.migration_model.application == self.application,
-                                          #self.migration_model.status == "success"
+                                          #self.migration_model.status == "apply success"
                                           ).count() > 0
 
 
     def apply(self, force=False):
+        if self.isapplied():
+            return
         logger.info("Applying %s", self.id)
-        migration = self.migration_model(id=self.id, application=self.application)
+        migration = self.migration_model(id=self.id, application=self.application, status="apply in process")
         self.key = migration.put()
         Migration._process_steps(self.steps, 'apply', self, force=force)
 
@@ -176,7 +258,8 @@ class Migration(object):
         migration = self.migration_model.query(self.migration_model.id == self.id,
                                                self.migration_model.application == self.application).get()
         if migration is not None:
-            self.key = migration.key
+            migration.status="rollback in process"
+            self.key = migration.put()
 
         Migration._process_steps(reversed(self.steps), 'rollback', self, force=force)
 
@@ -272,12 +355,7 @@ class Transaction(StepBase):
                 callback(self.steps, migration, force)
             else:
                 ndb.transaction(lambda:callback(self.steps, migration, force), xg=True)
-        except datastore_errors.TransactionFailedError:
-            if force or self.ignore_errors in ('apply', 'all'):
-                logging.exception("Ignored error in transaction while applying")
-                return
-            migration.fail()
-            raise
+        #except datastore_errors.TransactionFailedError:
         except Exception, err:
             if force or self.ignore_errors in ('apply', 'all'):
                 logging.exception("Ignored error in transaction while applying")
@@ -292,14 +370,15 @@ class Transaction(StepBase):
                 step.rollback(migration, force=force)
 
         try:
-            ndb.transaction(lambda:callback(self.steps, migration, force), xg=True)
-        except datastore_errors.TransactionFailedError:
+            if self.fake_transaction:
+                callback(self.steps, migration, force)
+            else:
+                ndb.transaction(lambda:callback(self.steps, migration, force), xg=True)
+        #except datastore_errors.TransactionFailedError:
+        except Exception:
             if force or self.ignore_errors in ('rollback', 'all'):
                 logging.exception("Ignored error in transaction while rolling back")
                 return
-            migration.fail()
-            raise
-        except Exception:
             migration.fail()
             raise
 
@@ -383,15 +462,16 @@ class MigrationStep(StepBase):
 
 
 
-def read_migrations(directories, names=None, migration_model=MigrationEntry):
+def read_migrations(directories=_MIGRATION_DIRS, names=None, migration_model=MigrationEntry):
     """
     Return a ``MigrationList`` containing all migrations from ``directory``.
     If ``names`` is given, this only return migrations with names from the given list (without file extensions).
     """
-
+    migrations_dict = {}
     migrations = MigrationList(migration_model)
     paths = []#set([])
     for app_name, dir in directories:
+        migrations_dict[app_name] = MigrationList(migration_model)
         for path in os.listdir(dir):
             if path.endswith('.py'):
                 paths.append( (app_name, os.path.join(dir, path)) )
@@ -465,11 +545,12 @@ def read_migrations(directories, names=None, migration_model=MigrationEntry):
                                     migration_model=migration_model)
 
         if migration_class is PostApplyHookMigration:
-            migrations.post_apply.append(migration)
+            migrations_dict[app_name].post_apply.append(migration)
+            #migrations.post_apply.append(migration)
         else:
-            migrations.append(migration)
+            migrations_dict[app_name].append(migration)
 
-    return migrations
+    return migrations_dict
 
 
 class MigrationList(list):
@@ -501,6 +582,10 @@ class MigrationList(list):
                             filter(lambda m: getattr(m,"application", None) == app_name, self),
                             self.post_apply)
 
+    def append(self, migration):
+        #prev_migration = self
+        super(MigrationList, self).append(migration)
+
 
     def url_query_for(self, action, migration):
         """
@@ -512,8 +597,9 @@ class MigrationList(list):
         migration - migration from migration list
 
         """
-        query = "action=%(action)s&index=%(index)s"
+        query = "action=%(action)s&index=%(index)s&app=%(application)s"
         index = self.index(migration)
+        application = getattr(migration, 'application', None)
 
         return query % locals()
 

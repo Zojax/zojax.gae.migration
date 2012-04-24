@@ -173,28 +173,30 @@
                                 <th>Action</th>
 
                             </tr>
-                            {% for entity in entities %}
-                                <tr class=""> {#                {% if forloop.counter|divisibleby:2 %}even{% else %}odd{% endif %}#}
-                                    <td><input type="checkbox" id="key{{ entities.index(entity) }}" name="key{{ entities.index(entity) }}" value="{{ entity.id|escape }}"/></td>
-                                    <td>{{ entity.application }}</td>
-                                    <td>
-                                        {{ entity.id }}
-                                    </td>
-                                    <td>
-                                        {{ entity.isapplied() }}
-                                    </td>
-                                    <td>
-                                        {{ entity.status }}
-                                    </td>
-                                    <td>
-                                        {% if entity.isapplied() %}
-                                            <a href="{{ uri_for("migration_queue") }}?{{ entities.url_query_for('rollback', entity) }}">Rollback</a> |
-                                            <a href="{{ uri_for("migration_queue") }}?{{ entities.url_query_for('reapply', entity) }}">Reapply</a>
-                                        {% else %}
-                                            <a href="{{ uri_for("migration_queue") }}?{{ entities.url_query_for('apply', entity) }}">Apply</a>
-                                        {% endif %}
-                                    </td>
-                                </tr>
+                            {% for app, migrations in entities.items()  %}
+                                {% for entity in migrations %}
+                                    <tr class=""> {#                {% if forloop.counter|divisibleby:2 %}even{% else %}odd{% endif %}#}
+                                        <td><input type="checkbox" id="key{{ migrations.index(entity) }}" name="key{{ migrations.index(entity) }}" value="{{ entity.id|escape }}"/></td>
+                                        <td>{{ app }}</td>
+                                        <td>
+                                            {{ entity.id }}
+                                        </td>
+                                        <td>
+                                            {{ entity.isapplied() }}
+                                        </td>
+                                        <td>
+                                            {{ entity.status }}
+                                        </td>
+                                        <td>
+                                            {% if entity.isapplied() %}
+                                                <a href="{{ uri_for("migration_queue") }}?{{ migrations.url_query_for('rollback', entity) }}">Rollback</a> |
+                                                <a href="{{ uri_for("migration_queue") }}?{{ migrations.url_query_for('reapply', entity) }}">Reapply</a>
+                                            {% else %}
+                                                <a href="{{ uri_for("migration_queue") }}?{{ migrations.url_query_for('apply', entity) }}">Apply</a>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
                             {% endfor %}
                         </table>
                     </form>
