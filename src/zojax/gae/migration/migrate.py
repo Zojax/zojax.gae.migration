@@ -2,6 +2,8 @@
 
 import os
 
+import urllib
+
 ######################
 #PATCH FOR ndb IMPORT#
 ######################
@@ -92,9 +94,6 @@ def call_next(migrations, application, target_index, action, worker_url):
                         'application': application,
                         'target_index': target_index
                 })
-
-class StorageError(Exception):
-    pass
 
 
 class AlreadyRegisteredError(Exception):
@@ -467,7 +466,6 @@ def read_migrations(directories=_MIGRATION_DIRS, names=None, migration_model=Mig
             if path.endswith('.py'):
                 paths.append( (app_name, os.path.join(dir, path)) )
     paths.sort()
-    #import pdb; pdb.set_trace()
 
     for app_name, path in paths:
 
@@ -557,25 +555,6 @@ class MigrationList(list):
         super(MigrationList, self).__init__(items if items else [])
         self.migration_model = migration_model
         self.post_apply = post_apply if post_apply else []
-        #self.applications = set([])
-
-#    def append(self, migration):
-#        super(MigrationList, self).append(migration)
-#        if hasattr(migration, "application"):
-#            self.applications.add(migration.application)
-
-    def get_for_app(self, app_name):
-        """
-        Returns a MigrationList instance of migrations for provided application
-        """
-        return self.__class__(
-                            self.migration_model,
-                            filter(lambda m: getattr(m,"application", None) == app_name, self),
-                            self.post_apply)
-
-    def append(self, migration):
-        #prev_migration = self
-        super(MigrationList, self).append(migration)
 
 
     def url_query_for(self, action, migration):
@@ -587,12 +566,10 @@ class MigrationList(list):
         migration - migration from migration list
 
         """
-        query = "action=%(action)s&index=%(index)s&app=%(application)s"
-        index = self.index(migration)
-        application = getattr(migration, 'application', None)
-
-        return query % locals()
-
+        return urllib.urlencode((('action', action),
+                                 ('index', self.index(migration)),
+                                 ('app', getattr(migration, 'application', None))
+                                ))
 
     def to_apply(self):
         """
@@ -627,17 +604,17 @@ class MigrationList(list):
     def replace(self, newmigrations):
         return self.__class__(self.migration_model, newmigrations, self.post_apply)
 
-    def apply(self, force=False):
-        if not self:
-            return
-        for m in self + self.post_apply:
-            m.apply(force)
+#    def apply(self, force=False):
+#        if not self:
+#            return
+#        for m in self + self.post_apply:
+#            m.apply(force)
 
-    def rollback(self, force=False):
-        if not self:
-            return
-        for m in self + self.post_apply:
-            m.rollback(force)
+#    def rollback(self, force=False):
+#        if not self:
+#            return
+#        for m in self + self.post_apply:
+#            m.rollback(force)
 
     def __getslice__(self, i, j):
         return self.__class__(

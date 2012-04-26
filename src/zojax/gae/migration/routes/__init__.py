@@ -2,6 +2,9 @@
 
 from webapp2 import Route
 
+from webapp2_extras.routes import PathPrefixRoute
+
+
 from ..handlers import MigrationHandler, QueueHandler, MigrationWorker, MigrationStatus
 
 
@@ -9,6 +12,7 @@ from ..handlers import MigrationHandler, QueueHandler, MigrationWorker, Migratio
 
 #from zojax.gae.migration import routes
 # routes.append(PathPrefixRoute('/_ah/migrations/', routes.routes))
+
 
 routes = [
 
@@ -18,3 +22,5 @@ routes = [
     Route('/status/', MigrationStatus, name='migration_status'),
 
     ]
+
+main_route = PathPrefixRoute('/_ah/migration', routes)

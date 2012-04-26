@@ -17,12 +17,12 @@ a relative path to your migrations::
 
 Also you need to include zojax.gae.migration's routes in your application like this::
 
-    from zojax.gae.migration import routes as migration_routes
+    from zojax.gae.migration import main_route as migration_route
 
     routes = [
                 #Your routes list here
                 ...
-                PathPrefixRoute('/_ah/migration', migration_routes.routes),
+                migration_route,
     ]
 
 Usage
