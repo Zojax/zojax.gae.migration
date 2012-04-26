@@ -29,3 +29,59 @@ Usage
 -----
 
 For managing migrations visit page `http://your.domain/_ah/migration/ <http://your.domain/_ah/migration/>`_
+
+
+Writting the migration
+**********************
+
+Every migration file should be a python module and you need to put into the migrations folder (registered earlier).
+
+The order of the migrations is alphabetical, so the most convenient of file naming is 0001.some_migration.py,
+0002.another migration.py etc.
+
+There are two functions in the context of migration: step and transaction.
+Here is an example of simplest definition of the migration steps logic::
+
+    def step1_apply(migration):
+        try:
+            # logic for applying the step
+        except Exception:
+            migration.fail()
+
+
+    def step1_rollback(migration):
+        # logic for rolling back the step
+        migration.succeed() # need to succeed the migration manually
+
+    def step2_apply(migration):
+        # logic for applying the step
+        migration.succeed() # need to succeed the migration manually
+
+    def step2_rollback(migration):
+        # possible use case
+        try:
+            # logic for rolling back the step
+        except Exception:
+            migration.fail()
+
+
+The possible usages of the steps are next (without rollback possibility)::
+
+    step(step1_apply)
+
+    step(step2_apply)
+
+Or (apply and rollback functionality)::
+
+    step(step1_apply, step1_rollback)
+
+    step(step2_apply, step2_rollback)
+
+Or (wrapped in transaction)::
+
+    transaction(
+
+        step(step1_apply, step1_rollback),
+        step(step2_apply, step2_rollback)
+    )
+
