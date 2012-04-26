@@ -77,6 +77,7 @@ class QueueHandler(BaseHandler):
         action = self.request.GET.get("action")
         target_index = self.request.GET.get("index", None)
         application = self.request.GET.get("app")
+        #import pdb; pdb.set_trace()
 
         call_next(self.migrations, application, target_index, action, self.uri_for("migration_worker"))
 
@@ -93,6 +94,8 @@ class MigrationWorker(BaseHandler):
         index = self.request.get('index')
         target_index = self.request.get('target_index')
 
+        logging.info("MigrationWorker: target_index -> %s" % str(target_index))
+
         if not action or not index or not target_index or not application:
             return
 
@@ -104,7 +107,7 @@ class MigrationWorker(BaseHandler):
             migrations = []
 
         if migration is not None:
-            migration.target_index = int(target_index)
+            migration.target_index = target_index
             getattr(migration, action)()
 
 
@@ -122,7 +125,19 @@ class MigrationStatus(BaseHandler):
         migration_object = self.migration_model.get_by_id(id)
         #import pdb; pdb.set_trace()
         logging.info("MigrationStatus: got migration_object %s " % str(migration_object))
+#        if self.key is not None:
+#            #import pdb; pdb.set_trace()
+#            migration.key.delete()
         if migration_object:
+#            import pdb; pdb.set_trace()
+            if status == "rollback success": # we can entirely remove the migration entry
+                logging.info("MigrationStatus: removing migration_object %s " % str(migration_object))
+                logging.info("Before remove: %s " % str(self.migration_model.query().fetch()))
+                migration_object.key.delete()
+                logging.info("After remove: %s " % str(self.migration_model.query().fetch()))
+                #import pdb; pdb.set_trace()
+                return
+
             migration_object.status = status
             migration_object.put()
             logging.info("MigrationStatus: put migration_object %s " % str(migration_object))

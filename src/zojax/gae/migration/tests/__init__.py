@@ -48,15 +48,23 @@ class TestCase(BaseTestCase):
         self.testbed.init_taskqueue_stub(root_path=os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         self.app = TestApp(app)
 
+    def assertContains(self, first, second, msg=None):
+        if not second in getattr(first, 'body', first):
+            raise self.failureException,\
+            (msg or '%r not in %r' % (second, first.body))
+
     def testReadMigrations(self):
         migrations = read_migrations(migrate._MIGRATION_DIRS)
 
         self.assertEqual(len(migrations), 2)
 
     def testTest(self):
+        res = self.app.get('/_ah/migration/')
+#        self.assertContains('qweqweqwe','zzz')
+
 
         #import nose; nose.tools.set_trace()
-        'aa'/0
+
 
 
 

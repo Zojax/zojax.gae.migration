@@ -165,7 +165,6 @@
                         <table class="entities">
                             <thead>
                             <tr>
-                                <th><input id="allkeys" type="checkbox" onclick="checkAllEntities();"/></th>
                                 <th>Application</th>
                                 <th>Migration Name</th>
                                 <th>Applied</th>
@@ -176,7 +175,6 @@
                             {% for app, migrations in entities.items()  %}
                                 {% for entity in migrations %}
                                     <tr class=""> {#                {% if forloop.counter|divisibleby:2 %}even{% else %}odd{% endif %}#}
-                                        <td><input type="checkbox" id="key{{ migrations.index(entity) }}" name="key{{ migrations.index(entity) }}" value="{{ entity.id|escape }}"/></td>
                                         <td>{{ app }}</td>
                                         <td>
                                             {{ entity.id }}
@@ -189,8 +187,7 @@
                                         </td>
                                         <td>
                                             {% if entity.isapplied() %}
-                                                <a href="{{ uri_for("migration_queue") }}?{{ migrations.url_query_for('rollback', entity) }}">Rollback</a> |
-                                                <a href="{{ uri_for("migration_queue") }}?{{ migrations.url_query_for('reapply', entity) }}">Reapply</a>
+                                                <a href="{{ uri_for("migration_queue") }}?{{ migrations.url_query_for('rollback', entity) }}">Rollback</a>
                                             {% else %}
                                                 <a href="{{ uri_for("migration_queue") }}?{{ migrations.url_query_for('apply', entity) }}">Apply</a>
                                             {% endif %}
@@ -216,138 +213,3 @@
 
 </body>
 </html>
-
-
-{#    #}
-{#    {% if entities %}#}
-{#        <div id="pagetotal">#}
-{#            Results <span class="count">{{ start|add:1 }}</span> - <span class="count">{{ entities|length|add:start }}</span> of <span class="count">{{ total }}</span>#}
-{#        </div>#}
-{#    {% endif %}#}
-{##}
-{#    <form action="{{ request.path }}" method="get">#}
-{#        {% if kinds or in_production %}#}
-{#            <div id="datastore_search">#}
-{#                <table>#}
-{#                    <tr>#}
-{#                        {% if show_namespace %}#}
-{#                            <td>#}
-{#                                <span class="name">Namespace</span>#}
-{#                            </td>#}
-{#                        {% endif %}#}
-{#                        <td>#}
-{#                            <span class="name">Entity Kind:</span>#}
-{#                        </td>#}
-{#                    </tr>#}
-{#                    <tr>#}
-{#                        {% if show_namespace %}#}
-{#                            <td>#}
-{#            <span class="value">#}
-{#              <input id="namespace_input" name="namespace" type="text" size="20" value="{{ namespace|escape }}"/>#}
-{#            </span>#}
-{#                            </td>#}
-{#                        {% endif %}#}
-{#                        <td align="right">#}
-{#            <span class="value">#}
-{#              {% if in_production %}#}
-{#                  <input id="kind_input" name="kind" type="text" size="8" value="{{ kind|escape }}" onkeyup="manageCreateButton()" onkeydown="manageCreateButton()"/>#}
-{#              {% else %}#}
-{#                  <select name="kind" id="kind_input">#}
-{#                      {% for a_kind in kinds %}#}
-{#                          <option value="{{ a_kind|escape }}"{% ifequal a_kind kind %} selected="selected"{% endifequal %}>{{ a_kind|escape }}</option>#}
-{#                      {% endfor %}#}
-{#                  </select>#}
-{#              {% endif %}#}
-{#            </span>#}
-{#                        </td>#}
-{#                        <td>#}
-{#            <span class="buttons">#}
-{#              <input type="submit" value="List Entities"/>#}
-{#              <input type="button" id="create_button" onclick="location.href='{{ datastore_edit_path }}?' + (document.getElementById('namespace_input') ? 'namespace=' + encodeURIComponent(document.getElementById('namespace_input').value) + '&amp;' : '') + 'kind=' + encodeURIComponent(document.getElementById('kind_input').value) + '&amp;next={{ request.uri|urlencode }}'" value="Create New Entity"/>#}
-{#            </span>#}
-{#                        </td>#}
-{#                    </tr>#}
-{#                    {% if not show_namespace %}#}
-{#                        <tr>#}
-{#                            <td colspan="3">#}
-{#                                <a id="select_namespace"#}
-{#                                   href="/_ah/admin/datastore?namespace=&kind={{ kind|escape }}">Select different namespace</a>#}
-{#                            </td>#}
-{#                        </tr>#}
-{#                    {% endif %}#}
-{#                </table>#}
-{#            </div>#}
-{#        {% else %}#}
-{#            <div id="datastore_empty">#}
-{#                {% if namespace %}#}
-{#                    Datastore has no entities in namespace#}
-{#                    &quot;{{ namespace|escape }}&quot;.#}
-{#                {% else %}#}
-{#                    Datastore has no entities in the Empty namespace. You need to#}
-{#                    add data programatically before you can use this tool to view#}
-{#                    and edit it.#}
-{#                {% endif %}#}
-{#                <br>#}
-{#                {% if show_namespace %}#}
-{#                    <span class="value">#}
-{#        <input id="namespace_input" name="namespace" type="text" size="20" value="{{ namespace|escape }}"/>#}
-{#        <input type="submit" value="Change Namespace"/>#}
-{#      </span>#}
-{#                {% else %}#}
-{#                    <a id="select_namespace"#}
-{#                       href="/_ah/admin/datastore?namespace=">Select different namespace</a>#}
-{#                {% endif %}#}
-{#            </div>#}
-{#        {% endif %}#}
-{#    </form>#}
-
-{#    #}
-
-
-{#    <script type="text/javascript">#}
-{#    //<![CDATA[#}
-{##}
-{#    function walk(element, condition, operation) {#}
-{#      if (!element) return;#}
-{#      if (condition(element)) {#}
-{#        operation(element);#}
-{#        return;#}
-{#      }#}
-{#      for (var e = element.firstChild; e != null; e = e.nextSibling) {#}
-{#        walk(e, condition, operation);#}
-{#      }#}
-{#    }#}
-{##}
-{#    function isCurrentLink(e) {#}
-{#      if (e.tagName != "A") return false;#}
-{#      re = new RegExp("^" + e.href + "(/.*)?(\\?.*)?$");#}
-{#      return re.test(window.location.href);#}
-{#    }#}
-{##}
-{#    function makeSelected(e) {#}
-{#      e.className = "ae-nav-selected";#}
-{#    }#}
-{##}
-{#    walk(document.getElementById("menu"), isCurrentLink, makeSelected);#}
-{##}
-{#    //]]>#}
-{#    </script>#}
-
-
-{#    <script type="text/javascript">#}
-{#        //<![CDATA[#}
-{##}
-{#        {% if in_production %}#}
-{#            manageCreateButton();#}
-{#        {% endif %}#}
-{##}
-{#        {% if entities %}#}
-{#            updateDeleteButtonAndCheckbox();#}
-{#        {% endif %}#}
-{##}
-{#        {% if kinds or in_production %}#}
-{#            document.getElementById("kind_input").focus();#}
-{#        {% endif %}#}
-{##}
-{#        //]]>#}
-{#    </script>#}
