@@ -5,7 +5,6 @@ import random
 
 from ndb import model
 
-#from inboxer.model import
 from zojax.gae.migration.tests import TestArticle
 
 TestArticle.add_property("rating", model.IntegerProperty)
@@ -36,7 +35,6 @@ def step2_apply(migration):
         article.rating = 9
         article.put()
     migration.succeed()
-    #import nose; nose.tools.set_trace()
 
 #def step2_rollback(migration):
 #    logging.info("2nd migration, rollback step 2: changing rating")

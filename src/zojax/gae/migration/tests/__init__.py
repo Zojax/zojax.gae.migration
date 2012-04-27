@@ -158,7 +158,7 @@ class MigrationsTestCase(BaseTestCase):
     def testApply(self):
         # Applying 1st migration
         target_migration = self.migrations[0]
-        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
+        self.app.get('/_ah/migration/tasks/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
         self.submit_deferred()
         # test results of applied migration
         TestArticle.add_property("author", model.StringProperty)
@@ -166,7 +166,7 @@ class MigrationsTestCase(BaseTestCase):
         self.assertEqual(articles.count(), 100)
         # Applying 2nd migration
         target_migration = self.migrations[1]
-        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
+        self.app.get('/_ah/migration/tasks/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
         self.submit_deferred()
         # test results of applied migration
         TestArticle.add_property("rating", model.IntegerProperty)
@@ -180,18 +180,18 @@ class MigrationsTestCase(BaseTestCase):
     def testRollback(self):
         # applying 2 migrations
         target_migration = self.migrations[1]
-        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
+        self.app.get('/_ah/migration/tasks/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
         self.submit_deferred()
         # rolling back 2nd migration
         target_migration = self.migrations[1]
-        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('rollback', target_migration))
+        self.app.get('/_ah/migration/tasks/migrate/?%s' % self.migrations.url_query_for('rollback', target_migration))
         self.submit_deferred()
         #TestArticle.add_property("rating", model.IntegerProperty)
         articles = TestArticle.query(TestArticle.rating > 0)
         self.assertEqual(articles.count(), 0)
         # rolling back 1st migration
         target_migration = self.migrations[0]
-        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('rollback', target_migration))
+        self.app.get('/_ah/migration/tasks/migrate/?%s' % self.migrations.url_query_for('rollback', target_migration))
         self.submit_deferred()
         articles = TestArticle.query(TestArticle.author.IN(("Me", "Other")))
         self.assertEqual(articles.count(), 0)

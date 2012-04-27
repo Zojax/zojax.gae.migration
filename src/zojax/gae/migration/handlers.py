@@ -6,7 +6,6 @@ import logging
 
 from jinja2 import Template
 from webapp2_extras import jinja2
-from webapp2_extras.appengine.users import admin_required
 
 from google.appengine.ext import db
 from google.appengine.api import taskqueue
@@ -14,37 +13,6 @@ from google.appengine.api import taskqueue
 from .migrate import default_config, MigrationEntry
 from .migrate import read_migrations, MigrationList, call_next, get_migration_dirs
 
-
-
-#def admin_required(handler):
-#    """
-#         Decorator for checking if there's a user associated with the current session.
-#         Will also fail if there's no session present.
-#     """
-#
-#    def check_user(self, *args, **kwargs):
-#
-#        user = users.get_current_user()
-#        if not user:
-#            self.redirect(users.create_login_url(self.request.uri))
-#            return
-#        else:
-#            handler_method(self, *args)
-#
-#        session_id = self.request.params.pop("auth", None)
-#
-#        auth = self.auth
-#        if not auth.get_user_by_session():
-#            # If handler has no login_url specified invoke a 403 error
-#            try:
-#                self.redirect(self.auth_config['login_url']+"?next=%s" % urllib.quote(self.request.path_qs),
-#                    abort=True)
-#            except (AttributeError, KeyError), e:
-#                self.abort(403)
-#        else:
-#            return handler(self, *args, **kwargs)
-#
-#    return check_login
 
 
 class BaseHandler(webapp2.RequestHandler):
@@ -93,11 +61,9 @@ class MigrationHandler(BaseHandler):
                                             "migrate.html")).read())
 
     def get(self):
-        #import pdb; pdb.set_trace()
         self.render_response(self.template, **{
                                                 "entities": self.migrations,
                                                 })
-
         return
 
 
@@ -111,7 +77,6 @@ class QueueHandler(BaseHandler):
         action = self.request.GET.get("action")
         target_index = self.request.GET.get("index", None)
         application = self.request.GET.get("app")
-        #import pdb; pdb.set_trace()
 
         call_next(self.migrations, application, target_index, action, self.uri_for("migration_worker"))
 
@@ -122,13 +87,11 @@ class QueueHandler(BaseHandler):
 
 class MigrationWorker(BaseHandler):
 
-    def post(self): # should run at most 1/s
+    def post(self):
         application = self.request.get('application')
         action = self.request.get('action')
         index = self.request.get('index')
         target_index = self.request.get('target_index')
-
-        logging.info("MigrationWorker: target_index -> %s" % str(target_index))
 
         if not action or not index or not target_index or not application:
             return
@@ -147,31 +110,22 @@ class MigrationWorker(BaseHandler):
 
 class MigrationStatus(BaseHandler):
 
-    def post(self): # should run at most 1/s
+    def post(self):
 
         status = self.request.get('status')
         try:
             id = int(self.request.get('id'))
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             id = None
-        logging.info("MigrationStatus: got id %s " % str(id))
 
         migration_object = self.migration_model.get_by_id(id)
-        #import pdb; pdb.set_trace()
-        logging.info("MigrationStatus: got migration_object %s " % str(migration_object))
-#        if self.key is not None:
-#            #import pdb; pdb.set_trace()
-#            migration.key.delete()
+
         if migration_object:
-#            import pdb; pdb.set_trace()
             if status == "rollback success": # we can entirely remove the migration entry
-                logging.info("MigrationStatus: removing migration_object %s " % str(migration_object))
-                logging.info("Before remove: %s " % str(self.migration_model.query().fetch()))
+                #logging.info("MigrationStatus: removing migration_object %s " % str(migration_object))
                 migration_object.key.delete()
-                logging.info("After remove: %s " % str(self.migration_model.query().fetch()))
-                #import pdb; pdb.set_trace()
                 return
 
             migration_object.status = status
             migration_object.put()
-            logging.info("MigrationStatus: put migration_object %s " % str(migration_object))
+            #logging.info("MigrationStatus: put migration_object %s " % str(migration_object))

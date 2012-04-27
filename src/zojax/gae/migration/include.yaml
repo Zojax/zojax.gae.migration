@@ -1,5 +1,0 @@
-handlers:
-
-- url: /_ah/migration/.*
-    script: zojax.gae.migration.app
-    login: admin

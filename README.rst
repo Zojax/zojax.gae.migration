@@ -4,6 +4,17 @@ Installation
 
 Install the package zojax.gae.migration into your project.
 
+Add appropriate settings to your yaml config, for example::
+
+    handlers:
+
+    - url: /_ah/migration/.*
+      script: yourapp.app
+      login: admin
+
+    - url: .*
+      script: yourapp.app
+
 Register your migrations folder of the application next way (typically it is placed in models.py module)::
 
     from zojax.gae.migration import register_migrations

@@ -19,7 +19,6 @@ sys.modules['ndb'] = ndb
 
 ######################
 
-import ndb
 import logging
 from logging import getLogger
 
@@ -65,9 +64,6 @@ def call_next(migrations, application, target_index, action, worker_url):
     assert isinstance(target_index, (basestring, int)) or target_index is None, "target_index should be int, str or None"
     assert action in ("apply", "rollback"), "action should be apply or rollback"
 
-    logging.info("call_next: called from %s" % str(sys._getframe(1).f_globals["__file__"]))
-    logging.info("call_next: target_index -> %s" % str(target_index))
-
     target_migrations = target_migration = origin_migrations = None
     if isinstance(target_index, basestring) and len(target_index):
         target_index = int(target_index)
@@ -85,8 +81,6 @@ def call_next(migrations, application, target_index, action, worker_url):
 
         if target_migrations:
             index = origin_migrations.index(target_migrations[0])
-            logging.info("call_next: starting new migration task %s" % target_migrations[0].id)
-            #import pdb; pdb.set_trace()
 
             taskqueue.add(url=worker_url,
                 params={'index': index,
@@ -194,17 +188,16 @@ class Migration(object):
         return status
 
     def set_status(self, status):
-        logger.info("setting the migration status to %s" % status)
+        #logger.info("setting the migration status to %s" % status)
         if self.key is not None:
             taskqueue.add(url="/_ah/migration/tasks/status/",
                           params={'id': self.key.id(),
                                   'status': status})
-        #import pdb; pdb.set_trace()
 
     status = property(get_status, set_status)
 
     def fail(self):
-        logger.info("failing the migration")
+        #logger.info("failing the migration")
         #import time; time.sleep(0.2)
         if self.status == "apply in process":
             self.status = "apply failed"
@@ -215,8 +208,7 @@ class Migration(object):
 
     def succeed(self):
         #import time; time.sleep(0.2)
-        logger.info("succeding the migration with current status %s " % self.status)
-#        import pdb; pdb.set_trace()
+        #logger.info("succeding the migration with current status %s " % self.status)
         action = None
         if self.status == "apply in process":
             self.status = "apply success"
@@ -224,7 +216,8 @@ class Migration(object):
         if self.status == "rollback in process":
             self.status = "rollback success"
             action = "rollback"
-        call_next(read_migrations(get_migration_dirs()), self.application, self.target_index, action, '/_ah/migration/tasks/worker/')
+        call_next(read_migrations(get_migration_dirs()), self.application,
+                                  self.target_index, action, '/_ah/migration/tasks/worker/')
 
 
     def isapplied(self, ready_only=False):
@@ -245,10 +238,9 @@ class Migration(object):
     def apply(self, force=False):
         if self.isapplied():
             return
-        logger.info("Applying %s", self.id)
+        #logger.info("Applying %s", self.id)
         migration = self.migration_model(id=self.id, application=self.application, status="apply in process")
-        #future = migration.put_async()
-        self.key = migration.put()#future.get_result()
+        self.key = migration.put()
         Migration._process_steps(self.steps, 'apply', self, force=force)
 
 
@@ -256,7 +248,7 @@ class Migration(object):
     def rollback(self, force=False):
         if not self.isapplied(ready_only=True):
             return
-        logger.info("Rolling back %s", self.id)
+        #logger.info("Rolling back %s", self.id)
         migration = self.migration_model.query(self.migration_model.id == self.id,
                                                self.migration_model.application == self.application).get()
         if migration is not None:
@@ -394,32 +386,6 @@ class MigrationStep(StepBase):
         self._rollback = rollback
         self._apply = apply
 
-    def _execute(self, stmt, out=sys.stdout):
-        """
-        Execute the given statement. If rows are returned, output these in a
-        tabulated format.
-        """
-        if isinstance(stmt, unicode):
-            logger.debug(" - executing %r", stmt.encode('ascii', 'replace'))
-        else:
-            logger.debug(" - executing %r", stmt)
-            #cursor.execute(stmt)
-        query = ndb.gql(stmt)
-        if query:
-            result = query.fetch()
-
-            #for row in result:
-            #    for ix, value in enumerate(row):
-            #        if len(value) > column_sizes[ix]:
-            #            column_sizes[ix] = len(value)
-            #format = '|'.join(' %%- %ds ' % size for size in column_sizes)
-            #out.write(format % tuple(column_names) + "\n")
-            #out.write('+'.join('-' * (size + 2) for size in column_sizes) + "\n")
-            #for row in result:
-            #    out.write((format % tuple(row)).encode('utf8') + "\n")
-            #out.write(plural(len(result), '(%d row)', '(%d rows)') + "\n")
-            out.write(str(result))
-
     def apply(self, migration, force=False):
         """
         Apply the step.
@@ -427,29 +393,25 @@ class MigrationStep(StepBase):
         force
             If true, errors will be logged but not be re-raised
         """
-        logger.info(" - applying step %d", self.id)
+        #logger.info(" - applying step %d", self.id)
         if not self._apply:
             return
 
-        if isinstance(self._apply, (str, unicode)):
-            self._execute(self._apply)
-        else:
+        if callable(self._apply):
             self._apply(migration)
+
 
 
     def rollback(self, migration, force=False):
         """
         Rollback the step.
         """
-        logger.info(" - rolling back step %d", self.id)
+        #logger.info(" - rolling back step %d", self.id)
         if self._rollback is None:
             return
 
-        if isinstance(self._rollback, (str, unicode)):
-            self._execute(self._rollback)
-        else:
+        if callable(self._rollback):
             self._rollback(migration)
-
 
 
 def read_migrations(directories=_MIGRATION_DIRS, names=None, migration_model=MigrationEntry):
