@@ -3,43 +3,25 @@
 import time, logging
 
 
-#from inboxer.model import
+def step1_apply(migration):
+    logging.info("3rd migration, apply step 1: empty logic")
 
-def test_step_apply(migration):
-    logging.info("Running apply step 1 of migration!! %s " % str(migration))
-    for i in range(1,3):
-        logging.info("3rd mig, 1st step: %sth cycle" % str(i))
-        #time.sleep(2)
 
-def test_step_rollback(migration):
-    logging.info(" 2 Running rollback step of migration!!")
-    for i in range(1,3):
-        logging.info("3rd mig, 1st step: %sth cycle" % str(i))
-        #time.sleep(2)
-
+def step1_rollback(migration):
+    logging.info("3rd migration, rollback step 1: empty logic")
     migration.succeed()
 
-def test_step2_apply(migration):
-
-    logging.info("Running apply step 2 of migration!! %s " % str(migration))
-    for i in range(1,3):
-        logging.info("3rd mig, 2nd step: %sth cycle" % str(i))
-        #time.sleep(2)
+def step2_apply(migration):
+    logging.info("3rd migration, apply step 2: empty logic")
     migration.succeed()
-    #b = 'aa' / 0
 
-def test_step2_rollback(migration):
-    logging.info("Running rollback step 2 of migration!! %s " % migration)
-    for i in range(1,2):
-        logging.info("3rd mig, 2nd step: %sth cycle" % str(i))
-        #time.sleep(2)
-
+def step2_rollback(migration):
+    logging.info("3rd migration, rollback step 2: empty logic")
 
 
 
 # 1st step
-step(test_step_apply, test_step_rollback)
-
+step(step1_apply, step1_rollback)
 
 # 2nd step
-step(test_step2_apply, test_step2_rollback)
+step(step2_apply, step2_rollback)

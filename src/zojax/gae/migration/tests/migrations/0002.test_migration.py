@@ -1,37 +1,51 @@
 # -*- coding: utf-8 -*-
 
 import time, logging
+import random
 
+from ndb import model
 
 #from inboxer.model import
+from zojax.gae.migration.tests import TestArticle
 
-def test_step_apply(migration):
-    logging.info("Running apply step 1 of migration!! %s " % str(migration))
-    for i in range(1,3):
-        logging.info("2nd mig, 1st step: %sth cycle" % str(i))
-        #time.sleep(2)
+TestArticle.add_property("rating", model.IntegerProperty)
 
-def test_step_rollback(migration):
-    logging.info(" 2 Running rollback step of migration!!")
+
+def step1_apply(migration):
+    logging.info("2nd migration, apply step 1: adding rating")
+    for article in TestArticle.query():
+        article.author = ["Me", "Other"][random.randrange(0,2)]
+        article.rating = random.randrange(1,10)
+        article.put()
+
+    #deferred.defer(cycles_func, 2, 1, 1)
+
+
+
+def step1_rollback(migration):
+    logging.info("2nd migration, rollback step 1: removing rating")
+    for article in TestArticle.query():
+        article.author = "Me"
+        del article.rating
+        article.put()
     migration.succeed()
 
-def test_step2_apply(migration):
-
-    logging.info("Running apply step 2 of migration!! %s " % str(migration))
-    for i in range(1,3):
-        logging.info("2nd mig, 2nd step: %sth cycle" % str(i))
-        #time.sleep(2)
+def step2_apply(migration):
+    logging.info("2nd migration, apply step 2: changing rating")
+    for article in TestArticle.query(TestArticle.author == "Me"):
+        article.rating = 9
+        article.put()
     migration.succeed()
-    #b = 'aa' / 0
+    #import nose; nose.tools.set_trace()
 
-def test_step2_rollback(migration):
-    logging.info("Running rollback step 2 of migration!! %s " % migration)
-    #migration.fail()
-
+#def step2_rollback(migration):
+#    logging.info("2nd migration, rollback step 2: changing rating")
+#    for article in TestArticle.query():
+#        article.author = article.author.lower()
+#        article.put()
 
 # 1st step
-step(test_step_apply, test_step_rollback)
-
+step(step1_apply, step1_rollback)
 
 # 2nd step
-step(test_step2_apply, test_step2_rollback)
+step(step2_apply)#, step2_rollback)

@@ -22,8 +22,6 @@ from ..migrate import read_migrations, register_migrations, get_migration_dirs
 from ..routes import routes
 
 
-#from .migrate import DatabaseError
-
 register_migrations("zojax.gae.migration", "migrations")
 
 app = WSGIApplication()
@@ -41,6 +39,22 @@ class TestArticle(model.Model):
     title = model.StringProperty()
     description = model.StringProperty()
     created = model.DateTimeProperty(auto_now=True)
+
+    @classmethod
+    def add_property(cls, name, property, **kwargs):
+        """
+        Method for dynamical adding model properties
+        """
+        setattr(cls, name, property(name, **kwargs))
+        cls._fix_up_properties()
+
+    @classmethod
+    def del_property(cls, name):
+        """
+        Method for dynamical adding model properties
+        """
+        delattr(cls, name)
+        cls._fix_up_properties()
 
 
 class BaseTestCase(TestCase):
@@ -92,7 +106,7 @@ class MigrationsTestCase(BaseTestCase):
             self.migrations = self.migrations_dict['zojax.gae.migration']
 
         # Initialising 100 TestArticle objects
-        for i in range(1, 100):
+        for i in range(1, 101):
             article = TestArticle(title= "beautiful article %s" % i, description= rand_text())
             article.put()
 
@@ -118,7 +132,7 @@ class MigrationsTestCase(BaseTestCase):
                          set([('action', 'apply'),('index', '0'), ('app', 'zojax.gae.migration')])
                         )
 
-    def testApply(self):
+    def testFullApply(self):
         # Check apllying process
         # /_ah/migration/migrate/?action=rollback&index=3&app=inboxer
         target_migration = self.migrations[3]
@@ -129,7 +143,7 @@ class MigrationsTestCase(BaseTestCase):
         applied = target_migration.migration_model.query(target_migration.migration_model.status == 'apply success')
         self.assertEqual(applied.count(), 4)
 
-    def testRollback(self):
+    def testFullRollback(self):
         self.testApply()
         target_migration = self.migrations[0]
         res = self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('rollback', target_migration))
@@ -141,150 +155,43 @@ class MigrationsTestCase(BaseTestCase):
         self.assertEqual(rollback.count(), 0)
         #1/0
 
-    def testTest(self):
-        res = self.app.get('/_ah/migration/')
-    #        self.assertContains('qweqweqwe','zzz')
+    def testApply(self):
+        # Applying 1st migration
+        target_migration = self.migrations[0]
+        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
+        self.submit_deferred()
+        # test results of applied migration
+        TestArticle.add_property("author", model.StringProperty)
+        articles = TestArticle.query(TestArticle.author=="Me")
+        self.assertEqual(articles.count(), 100)
+        # Applying 2nd migration
+        target_migration = self.migrations[1]
+        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
+        self.submit_deferred()
+        # test results of applied migration
+        TestArticle.add_property("rating", model.IntegerProperty)
+        articles = TestArticle.query(TestArticle.author=="Me")
+        me_artices = articles.count()
+        self.assertLess(me_artices, 100)
+        # Test that all article of author 'me' has rating 9
+        self.assertEqual(me_artices, articles.filter(TestArticle.rating == 9).count())
+        TestArticle.del_property("author")
 
-
-
-
-#def with_migrations(*migrations):
-#    """
-#    Decorator taking a list of migrations. Creates a temporary directory writes
-#    each migration to a file (named '0.py', '1.py', '2.py' etc), calls the decorated
-#    function with the directory name as the first argument, and cleans up the
-#    temporary directory on exit.
-#    """
-#
-#    def unindent(s):
-#        initial_indent = re.search(r'^([ \t]*)\S', s, re.M).group(1)
-#        return re.sub(r'(^|[\r\n]){0}'.format(re.escape(initial_indent)), r'\1', s)
-#
-#    def decorator(func):
-#        tmpdir = mkdtemp()
-#        for ix, code in enumerate(migrations):
-#            with open(os.path.join(tmpdir, '{0}.py'.format(ix)), 'w') as f:
-#                f.write(unindent(code).strip())
-#
-#        @wraps(func)
-#        def decorated(*args, **kwargs):
-#            try:
-#                func(tmpdir, *args, **kwargs)
-#            finally:
-#                rmtree(tmpdir)
-#
-#        return decorated
-#    return decorator
-#
-#@with_migrations(
-#    """
-#step("CREATE TABLE test (id INT)")
-#transaction(
-#    step("INSERT INTO test VALUES (1)"),
-#    step("INSERT INTO test VALUES ('x', 'y')")
-#)
-#    """
-#)
-#def test_transaction_is_not_committed_on_error(tmpdir):
-#    conn, paramstyle = connect(dburi)
-#    migrations = read_migrations(conn, paramstyle, tmpdir)
-#    try:
-#        migrations.apply()
-#    except DatabaseError:
-#        # Expected
-#        pass
-#    else:
-#        raise AssertionError("Expected a DatabaseError")
-#    cursor = conn.cursor()
-#    cursor.execute("SELECT count(1) FROM test")
-#    assert cursor.fetchone() == (0,)
-#
-#
-#@with_migrations(
-#    'step("CREATE TABLE test (id INT)")',
-#    '''
-#step("INSERT INTO test VALUES (1)", "DELETE FROM test WHERE id=1")
-#step("UPDATE test SET id=2 WHERE id=1", "UPDATE test SET id=1 WHERE id=2")
-#    '''
-#)
-#def test_rollbacks_happen_in_reverse(tmpdir):
-#    conn, paramstyle = connect(dburi)
-#    migrations = read_migrations(conn, paramstyle, tmpdir)
-#    migrations.apply()
-#    cursor = conn.cursor()
-#    cursor.execute("SELECT * FROM test")
-#    assert cursor.fetchall() == [(2,)]
-#    migrations.rollback()
-#    cursor.execute("SELECT * FROM test")
-#    assert cursor.fetchall() == []
-#
-#@with_migrations(
-#    '''
-#    step("CREATE TABLE test (id INT)")
-#    step("INSERT INTO test VALUES (1)")
-#    step("INSERT INTO test VALUES ('a', 'b')", ignore_errors='all')
-#    step("INSERT INTO test VALUES (2)")
-#    '''
-#)
-#def test_execution_continues_with_ignore_errors(tmpdir):
-#    conn, paramstyle = connect(dburi)
-#    migrations = read_migrations(conn, paramstyle, tmpdir)
-#    migrations.apply()
-#    cursor = conn.cursor()
-#    cursor.execute("SELECT * FROM test")
-#    assert cursor.fetchall() == [(1,), (2,)]
-#
-#@with_migrations(
-#    '''
-#    step("CREATE TABLE test (id INT)")
-#    transaction(
-#        step("INSERT INTO test VALUES (1)"),
-#        step("INSERT INTO test VALUES ('a', 'b')"),
-#        ignore_errors='all'
-#    )
-#    step("INSERT INTO test VALUES (2)")
-#    '''
-#)
-#def test_execution_continues_with_ignore_errors_in_transaction(tmpdir):
-#    conn, paramstyle = connect(dburi)
-#    migrations = read_migrations(conn, paramstyle, tmpdir)
-#    migrations.apply()
-#    cursor = conn.cursor()
-#    cursor.execute("SELECT * FROM test")
-#    assert cursor.fetchall() == [(2,)]
-#
-#@with_migrations(
-#    '''
-#    step("CREATE TABLE test (id INT)")
-#    step("INSERT INTO test VALUES (1)", "DELETE FROM test WHERE id=2")
-#    step("UPDATE test SET id=2 WHERE id=1", "SELECT nonexistent FROM imaginary", ignore_errors='rollback')
-#    '''
-#)
-#def test_rollbackignores_errors(tmpdir):
-#    conn, paramstyle = connect(dburi)
-#    migrations = read_migrations(conn, paramstyle, tmpdir)
-#    migrations.apply()
-#    cursor = conn.cursor()
-#    cursor.execute("SELECT * FROM test")
-#    assert cursor.fetchall() == [(2,)]
-#
-#    migrations.rollback()
-#    cursor.execute("SELECT * FROM test")
-#    assert cursor.fetchall() == []
-#
-#
-#@with_migrations(
-#    '''
-#    step("CREATE TABLE test (id INT)")
-#    step("DROP TABLE test")
-#    '''
-#)
-#def test_specify_migration_table(tmpdir):
-#    conn, paramstyle = connect(dburi)
-#    migrations = read_migrations(conn, paramstyle, tmpdir, migration_table='another_migration_table')
-#    migrations.apply()
-#    cursor = conn.cursor()
-#    cursor.execute("SELECT id FROM another_migration_table")
-#    assert cursor.fetchall() == [(u'0',)]
-
-
+    def testRollback(self):
+        # applying 2 migrations
+        target_migration = self.migrations[1]
+        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
+        self.submit_deferred()
+        # rolling back 2nd migration
+        target_migration = self.migrations[1]
+        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('rollback', target_migration))
+        self.submit_deferred()
+        #TestArticle.add_property("rating", model.IntegerProperty)
+        articles = TestArticle.query(TestArticle.rating > 0)
+        self.assertEqual(articles.count(), 0)
+        # rolling back 1st migration
+        target_migration = self.migrations[0]
+        self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('rollback', target_migration))
+        self.submit_deferred()
+        articles = TestArticle.query(TestArticle.author.IN(("Me", "Other")))
+        self.assertEqual(articles.count(), 0)
