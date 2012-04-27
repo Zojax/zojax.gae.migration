@@ -1,2 +1,2 @@
 global-include templates/*
-global-include *.yaml
+include *.yaml
