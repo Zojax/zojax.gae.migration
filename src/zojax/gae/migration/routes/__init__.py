@@ -17,10 +17,10 @@ from ..handlers import MigrationHandler, QueueHandler, MigrationWorker, Migratio
 routes = [
 
     Route('/', MigrationHandler, name='migration'),
-    Route('/migrate/', QueueHandler, name='migration_queue'),
-    Route('/worker/', MigrationWorker, name='migration_worker'),
-    Route('/status/', MigrationStatus, name='migration_status'),
+    Route('/tasks/migrate/', QueueHandler, name='migration_queue'),
+    Route('/tasks/worker/', MigrationWorker, name='migration_worker'),
+    Route('/tasks/status/', MigrationStatus, name='migration_status'),
 
     ]
 
-main_route = PathPrefixRoute('/_ah/migration', routes)
+#main_route = PathPrefixRoute('/_ah/migration', routes)

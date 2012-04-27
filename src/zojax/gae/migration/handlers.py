@@ -6,12 +6,45 @@ import logging
 
 from jinja2 import Template
 from webapp2_extras import jinja2
+from webapp2_extras.appengine.users import admin_required
 
 from google.appengine.ext import db
 from google.appengine.api import taskqueue
 
 from .migrate import default_config, MigrationEntry
 from .migrate import read_migrations, MigrationList, call_next, get_migration_dirs
+
+
+
+#def admin_required(handler):
+#    """
+#         Decorator for checking if there's a user associated with the current session.
+#         Will also fail if there's no session present.
+#     """
+#
+#    def check_user(self, *args, **kwargs):
+#
+#        user = users.get_current_user()
+#        if not user:
+#            self.redirect(users.create_login_url(self.request.uri))
+#            return
+#        else:
+#            handler_method(self, *args)
+#
+#        session_id = self.request.params.pop("auth", None)
+#
+#        auth = self.auth
+#        if not auth.get_user_by_session():
+#            # If handler has no login_url specified invoke a 403 error
+#            try:
+#                self.redirect(self.auth_config['login_url']+"?next=%s" % urllib.quote(self.request.path_qs),
+#                    abort=True)
+#            except (AttributeError, KeyError), e:
+#                self.abort(403)
+#        else:
+#            return handler(self, *args, **kwargs)
+#
+#    return check_login
 
 
 class BaseHandler(webapp2.RequestHandler):
@@ -58,6 +91,7 @@ class MigrationHandler(BaseHandler):
     template = Template(open(os.path.join(os.path.dirname(__file__),
                                             "templates",
                                             "migrate.html")).read())
+
     def get(self):
         #import pdb; pdb.set_trace()
         self.render_response(self.template, **{

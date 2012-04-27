@@ -196,7 +196,7 @@ class Migration(object):
     def set_status(self, status):
         logger.info("setting the migration status to %s" % status)
         if self.key is not None:
-            taskqueue.add(url="/_ah/migration/status/",
+            taskqueue.add(url="/_ah/migration/tasks/status/",
                           params={'id': self.key.id(),
                                   'status': status})
         #import pdb; pdb.set_trace()
@@ -224,7 +224,7 @@ class Migration(object):
         if self.status == "rollback in process":
             self.status = "rollback success"
             action = "rollback"
-        call_next(read_migrations(get_migration_dirs()), self.application, self.target_index, action, '/_ah/migration/worker/')
+        call_next(read_migrations(get_migration_dirs()), self.application, self.target_index, action, '/_ah/migration/tasks/worker/')
 
 
     def isapplied(self, ready_only=False):

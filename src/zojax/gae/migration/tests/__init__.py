@@ -136,7 +136,7 @@ class MigrationsTestCase(BaseTestCase):
         # Check apllying process
         # /_ah/migration/migrate/?action=rollback&index=3&app=inboxer
         target_migration = self.migrations[3]
-        res = self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
+        res = self.app.get('/_ah/migration/tasks/migrate/?%s' % self.migrations.url_query_for('apply', target_migration))
         self.assertEqual(res.status_int, 302)
         self.submit_deferred()
         # test 4 migrations applied successfully
@@ -146,7 +146,7 @@ class MigrationsTestCase(BaseTestCase):
     def testFullRollback(self):
         self.testApply()
         target_migration = self.migrations[0]
-        res = self.app.get('/_ah/migration/migrate/?%s' % self.migrations.url_query_for('rollback', target_migration))
+        res = self.app.get('/_ah/migration/tasks/migrate/?%s' % self.migrations.url_query_for('rollback', target_migration))
 
         self.assertEqual(res.status_int, 302)
         self.submit_deferred()
