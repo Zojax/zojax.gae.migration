@@ -150,6 +150,7 @@ class MigrationEntry(model.Model):
         memcache.delete(key.kind())
 
     def _post_put_hook(self, future):
+        super(MigrationEntry, self)._post_put_hook(future)
         memcache.delete(self.key.kind())
 
 default_config = {
